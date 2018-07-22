@@ -101,7 +101,11 @@ def get_links(music_dir):
                 continue
 
             path = os.path.join(dirpath, f)
-            tags = taglib.File(path).tags
+            try:
+                tags = taglib.File(path).tags
+            except OSError:
+                __log__.warning("Failed to parse tag from file: '%s'", path)
+                continue
             tags = {k: v[0] for k, v in tags.items() if v}
             tags["path"] = path
             tags["ext"] = path.rsplit(".", 1)[-1]

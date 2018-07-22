@@ -12,7 +12,7 @@ import taglib
 
 INVALID_CHAR_MAP = str.maketrans('<>:\/|"', "[]----'", "?*")
 MUSIC_FILE_REGEX = re.compile(".+\.(flac|mp3|ogg|oga|wma)", re.IGNORECASE)
-STRUCTURE = ["{ALBUMARTIST}", "{ALBUM} ({DATE})"]
+STRUCTURE = ["{ALBUMARTIST}", "{ALBUM} ({YEAR})"]
 TRACK_FMT = "{TRACKNUMBER:02d} - {TITLE}.{ext}"
 COMPILATION_TRACK_FMT = "{TRACKNUMBER:02d} - {ARTIST} - {TITLE}.{ext}"
 DISCNUM_PREFIX_FMT = "{DISCNUMBER}-"
@@ -53,7 +53,7 @@ def get_albumartist(tags, disp=False):
     return aa
 
 
-def get_date(tags, disp=False):
+def get_year(tags, disp=False):
     date = try_keys(tags, ["DATE", "ORIGINALDATE", "YEAR"])
     if date is None:
         return "0000" if disp else None
@@ -82,7 +82,7 @@ MAPPING = {
         "ALBUMARTIST": get_albumartist,
         "ARTIST": get_artist,
         "ALBUM": get_album,
-        "DATE": get_date,
+        "YEAR": get_year,
         "DISCNUMBER": get_disc,
         "TRACKNUMBER": get_tracknumber,
         "TITLE": get_title

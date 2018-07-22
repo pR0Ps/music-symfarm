@@ -16,6 +16,11 @@ STRUCTURE = ["{ALBUMARTIST}", "{ALBUM} ({YEAR})"]
 TRACK_FMT = "{TRACKNUMBER:02d} - {TITLE}.{ext}"
 COMPILATION_TRACK_FMT = "{TRACKNUMBER:02d} - {ARTIST} - {TITLE}.{ext}"
 DISCNUM_PREFIX_FMT = "{DISCNUMBER}-"
+MULTIPLE_ARTISTS = "Various Artists"
+UNKNOWN_ARTIST = "Unknown Artist"
+UNKNOWN_ALBUM = "Unknown Album"
+UNKNOWN_TITLE = "Unknown Title"
+UNKNOWN_DATE = "0000-00-00"
 
 
 __log__ = logging.getLogger(__name__)
@@ -38,26 +43,36 @@ def try_keys(d, keys, default=None):
     return default
 
 
+def get_title(tags, disp=False):
+    return tags.get("TITLE", UNKNOWN_TITLE if disp else None)
+
+
 def get_album(tags, disp=False):
-    return tags.get("ALBUM", "Unknown Album" if disp else None)
+    return tags.get("ALBUM", UNKNOWN_ALBUM if disp else None)
 
 
 def get_artist(tags, disp=False):
-    return tags.get("ARTIST", "Unknown Artist" if disp else None)
+    return tags.get("ARTIST", UNKNOWN_ARTIST if disp else None)
 
 
 def get_albumartist(tags, disp=False):
     aa = tags.get("ALBUMARTIST", None)
     if disp and not aa:
-        return get_artist(tags, True)
+        return get_artist(tags, disp=True)
     return aa
 
 
+def get_date(tags, disp=False):
+    date = try_keys(tags, ["ORIGINALDATE", "DATE", "YEAR"])
+    if disp and not date:
+        return UNKNOWN_DATE
+    return date
+
+
 def get_year(tags, disp=False):
-    date = try_keys(tags, ["DATE", "ORIGINALDATE", "YEAR"])
-    if date is None:
-        return "0000" if disp else None
-    return date.split("-")[0]
+    date = get_date(tags, disp=disp)
+    if date:
+        return date.split("-")[0]
 
 
 def get_disc(tags, disp=False):
@@ -74,80 +89,111 @@ def get_tracknumber(tags, disp=False):
     return 0 if disp else None
 
 
-def get_title(tags, disp=False):
-    return tags.get("TITLE", None)
-
-
-MAPPING = {
-        "ALBUMARTIST": get_albumartist,
-        "ARTIST": get_artist,
-        "ALBUM": get_album,
-        "YEAR": get_year,
-        "DISCNUMBER": get_disc,
-        "TRACKNUMBER": get_tracknumber,
-        "TITLE": get_title
-}
-
-
-def get_links(music_dir):
-    """Scrape through the directory and yield (dst link, src file) pairs"""
-
-    # Group all files by album (an album is the base "unit" of music)
-    __log__.info("Scraping information from music files")
-    albums = defaultdict(list)
+def get_songs(music_dir):
+    """Scrape through the music directory and yield indvidual songs"""
+    success, ignored, failed = 0, 0, 0
     for dirpath, dirs, files in os.walk(music_dir):
         for f in files:
-            if not MUSIC_FILE_REGEX.match(f):
+            if not MUSIC_FILE_REGEX.fullmatch(f):
+                ignored += 1
                 continue
 
             path = os.path.join(dirpath, f)
             try:
                 tags = taglib.File(path).tags
             except OSError:
-                __log__.warning("Failed to parse tag from file: '%s'", path)
+                __log__.warning("Failed to parse tags from file: '%s'", path)
+                failed += 1
                 continue
             tags = {k: v[0] for k, v in tags.items() if v}
             tags["path"] = path
             tags["ext"] = path.rsplit(".", 1)[-1]
-            albums[get_album(tags)].append(tags)
+            __log__.debug("Scraped tags from file: '%s'", path)
+            success += 1
+            yield tags
 
-    __log__.info("Attempting to deduplicate album names using the albumartist tag")
-    # Check for album name collisions (the "Greatest Hits" problem)
-    # Only works if the ALBUMARTIST tag is actually set in the media
-    newalbums = defaultdict(list)
-    for album, songs in albums.items():
-        album_artists = defaultdict(list)
-        for song in songs:
-            album_artists[get_albumartist(song)].append(song)
-        for aa, songs in album_artists.items():
-            # This key is only used internally (not output anywhere)
-            newalbums[album + str(aa)] = songs
-    albums = newalbums
+    __log__.info(
+        "Found %d valid songs (%d total files, %d ignored, %d failed)",
+        success, success + ignored + failed, ignored, failed
+    )
 
-    __log__.info("Generating link paths from the music metadata")
+
+def album_id(tags):
+    """Make an album ID given the tags
+
+    In other words, this has to be the same for all songs on an album
+    """
+    # Uses lowercase album name, date, and albumartist
+    return tuple(map(
+        lambda x: x.lower() if x else x,
+        (get_album(tags), get_date(tags), get_albumartist(tags))
+    ))
+
+
+def group_by_album(songs):
+    """Group songs by albums and yield the groups"""
+    albums = defaultdict(list)
+    num = 0
+    for num, song in enumerate(songs):
+        albums[album_id(song)].append(song)
+
+    __log__.info("Grouped %d songs into %d albums", num + 1, len(albums))
+
     for songs in albums.values():
         if not songs:
             continue
+        yield songs
 
-        album = get_album(songs[0])
-        compilation = not all_same(get_artist(x) for x in songs)
-        num_discs = len(set(get_disc(x) for x in songs))
 
-        for s in songs:
-            for key, fcn in MAPPING.items():
-                s[key] = fcn(s, disp=True)
+ALBUM_MAPPING = {
+        "ALBUMARTIST": get_albumartist,
+        "ALBUM": get_album,
+        "YEAR": get_year,
+}
+TRACK_MAPPING = {
+        "ARTIST": get_artist,
+        "DISCNUMBER": get_disc,
+        "TRACKNUMBER": get_tracknumber,
+        "TITLE": get_title
+}
 
+
+def get_links(albums):
+    """Generates (dst link, src file) pairs for each song in each album"""
+
+    for album in albums:
+        # Use the album information from the first song's data. This prevents
+        # issues where songs were grouped into the same album but the data was
+        # slightly different (ex: casing)
+        album_tags = {
+            k: f(album[0], disp=True) for k, f in ALBUM_MAPPING.items()
+        }
+
+        # Figure out the format to use for the tracks
+
+        # Check for multi-artist album (compilation)
+        if all_same(get_artist(s) for s in album):
             track_fmt = TRACK_FMT
+        else:
+            album_tags["ALBUMARTIST"] = MULTIPLE_ARTISTS
+            track_fmt = COMPILATION_TRACK_FMT
 
-            if compilation:
-                s["ALBUMARTIST"] = "Various Artists"
-                track_fmt = COMPILATION_TRACK_FMT
+        # Check for multidisc
+        if len(set(get_disc(s) for s in album)) > 1:
+            track_fmt = DISCNUM_PREFIX_FMT + track_fmt
 
-            if num_discs > 1:
-                track_fmt = DISCNUM_PREFIX_FMT + track_fmt
+        for song in album:
+            for key, fcn in TRACK_MAPPING.items():
+                song[key] = fcn(song, disp=True)
 
-            link_name = os.sep.join(x.format(**s).translate(INVALID_CHAR_MAP) for x in STRUCTURE + [track_fmt])
-            yield (link_name, s["path"])
+            # Override song tags with the album-level version
+            song.update(album_tags)
+
+            link_name = os.sep.join(
+                path_comp.format(**song).translate(INVALID_CHAR_MAP)
+                for path_comp in STRUCTURE + [track_fmt]
+            )
+            yield (link_name, song["path"])
 
 
 def make_links(link_dir, links):
@@ -155,40 +201,69 @@ def make_links(link_dir, links):
 
     Will make any required directories and only overwrite existing symlinks if required
     """
-    __log__.info("Creating symlinks")
+    existed, updated, created, failed = 0, 0, 0, 0
     for link, source in links:
         __log__.debug("%s ---> %s", link, source)
         link_path = link_dir.joinpath(link)
-        os.makedirs(link_path.parent, exist_ok=True)
+        try:
+            os.makedirs(link_path.parent, exist_ok=True)
+        except OSError as e:
+            __log__.warning(
+                "Failed to make directory '%s': %s", link_path.parent, e
+            )
+            failed += 1
+            continue
         if os.path.exists(link_path):
             if os.readlink(link_path) == source:
                 # exists and is already pointing at the correct file
+                existed += 1
                 continue
             else:
-                # incorrect link, remove it
+                # incorrect link, remove it so it can be recreated
+                updated += 1
+                created -= 1
                 os.remove(link_path)
-        os.symlink(src=source, dst=link_path)
+        try:
+            os.symlink(src=source, dst=link_path)
+            created += 1
+        except OSError as e:
+            __log__.warning(
+                "Failed to symlink '%s' --> '%s': %s", link_path, source, e
+            )
+            failed += 1
+            continue
+
+    __log__.info(
+        "Created %d new symlinks (%d updated, %d preexisting, %d failed)",
+        created, updated, existed, failed
+    )
 
 
 def clean_link_dir(link_dir):
     """Will remove any broken links and empty directories"""
-    __log__.info("Removing broken symlinks and empty directories from the link dir")
+    __log__.info("Cleaning link directory")
 
+    broken, empty = 0, 0
     for dirpath, dirs, files in os.walk(link_dir, topdown=False, followlinks=False):
-        num_files = len(files)
         for f in files:
             path = os.path.join(dirpath, f)
             if os.path.islink(path) and not os.path.exists(os.readlink(path)):
                 # Broken symlink, remove
-                __log__.debug("Deleting broken symlink: %s", path)
-                os.remove(path)
-                num_files -= 1
+                with contextlib.suppress(OSError):
+                    os.remove(path)
+                    broken += 1
+                    __log__.debug("Deleted broken symlink: %s", path)
 
-        if not num_files:
-            # Refresh the dir list since we may have already deleted things at a lower level
-            if not any(os.path.exists(os.path.join(dirpath, x)) for x in dirs):
-                __log__.debug("Deleting empty directory: %s", dirpath)
-                os.rmdir(dirpath)
+        # Attempt to rmdir everything on the way up and catch the OSErrors
+        with contextlib.suppress(OSError):
+            os.rmdir(dirpath)
+            empty += 1
+            __log__.debug("Deleted empty directory: %s", dirpath)
+
+    __log__.info(
+        "Deleted %d broken symlinks and %d empty directories",
+        broken, empty
+    )
 
 
 def make_symfarm(*, music_dir, link_dir, clean=False):
@@ -202,6 +277,8 @@ def make_symfarm(*, music_dir, link_dir, clean=False):
     if clean:
         clean_link_dir(link_dir)
 
-    links = get_links(music_dir)
+    songs = get_songs(music_dir)
+    albums = group_by_album(songs)
+    links = get_links(albums)
     make_links(link_dir, links)
     __log__.info("Done!")

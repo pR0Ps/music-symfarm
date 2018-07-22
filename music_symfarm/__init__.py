@@ -11,7 +11,7 @@ import taglib
 
 
 INVALID_CHAR_MAP = str.maketrans('<>:\/|"', "[]----'", "?*")
-MUSIC_FILE_REGEX = re.compile(".+\.(flac|mp3|ogg|oga)", re.IGNORECASE)
+MUSIC_FILE_REGEX = re.compile(".+\.(flac|mp3|ogg|oga|wma)", re.IGNORECASE)
 STRUCTURE = ["{ALBUMARTIST}", "{ALBUM} ({DATE})"]
 TRACK_FMT = "{TRACKNUMBER:02d} - {TITLE}.{ext}"
 COMPILATION_TRACK_FMT = "{TRACKNUMBER:02d} - {ARTIST} - {TITLE}.{ext}"

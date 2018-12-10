@@ -18,6 +18,8 @@ def parse_args():
                         help='Directory where the symlinks will be created')
     parser.add_argument('--clean', action='store_true',
                         help='Clean the link directory of broken links and empty directories')
+    parser.add_argument('--rescan-existing', action='store_true',
+                        help='Rescan files that already have links pointing to them')
     parser.add_argument("--log", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], default="INFO",
                         help="Set the logging level (default: %(default)s)")
     return vars(parser.parse_args())

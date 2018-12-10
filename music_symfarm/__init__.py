@@ -89,9 +89,67 @@ def get_tracknumber(tags, disp=False):
     return 0 if disp else None
 
 
-def get_songs(music_dir):
-    """Scrape through the music directory and yield indvidual songs"""
-    success, ignored, failed = 0, 0, 0
+def process_linkdir(link_dir, music_dir, existing=True, clean=True):
+    """Process data in the link directory
+
+    If existing is True (default), will return a set of paths in music_dir
+    that are symlinked from files in the link_dir
+
+    If clean is True (default), will remove any broken links and empty
+    directories
+    """
+    if not existing and not clean:
+        return None
+
+    __log__.info("Processing existing symlinks in '%s'", link_dir)
+
+    exist = set()
+    broken, empty = 0, 0
+    for dirpath, dirs, files in os.walk(link_dir, topdown=False):
+        for f in files:
+            path = os.path.join(dirpath, f)
+            if not os.path.islink(path):
+                continue
+
+            target = os.readlink(path)
+            if not os.path.exists(target):
+                if clean:
+                    # Broken symlink, remove
+                    with contextlib.suppress(OSError):
+                        os.remove(path)
+                        broken += 1
+                        __log__.debug("Deleted broken symlink: %s", path)
+            elif existing and Path(os.path.commonpath((music_dir, target))) == music_dir:
+                exist.add(target)
+
+        # Attempt to rmdir everything on the way up and catch the OSErrors
+        if clean:
+            with contextlib.suppress(OSError):
+                os.rmdir(dirpath)
+                empty += 1
+                __log__.debug("Deleted empty directory: %s", dirpath)
+
+    if clean:
+        __log__.info(
+            "Deleted %d broken symlinks and %d empty directories",
+            broken, empty
+        )
+    if existing:
+        __log__.info(
+            "Found %d existing valid symlinks", len(exist)
+        )
+        return exist
+    return None
+
+
+def get_songs(music_dir, existing=None):
+    """Scrape through the music directory and yield indvidual songs
+
+    If existing is provided, all paths in it will be ignored
+    """
+
+    existing = existing or set()
+    success, linked, ignored, failed = 0, 0, 0, 0
     for dirpath, dirs, files in os.walk(music_dir):
         for f in files:
             if not MUSIC_FILE_REGEX.fullmatch(f):
@@ -99,6 +157,9 @@ def get_songs(music_dir):
                 continue
 
             path = os.path.join(dirpath, f)
+            if path in existing:
+                linked += 1
+                continue
             try:
                 tags = taglib.File(path).tags
             except OSError:
@@ -113,8 +174,8 @@ def get_songs(music_dir):
             yield tags
 
     __log__.info(
-        "Found %d valid songs (%d total files, %d ignored, %d failed)",
-        success, success + ignored + failed, ignored, failed
+        "Found %d new songs (%d total files, %d already linked, %d ignored, %d failed)",
+        success, success + ignored + linked + failed, linked, ignored, failed
     )
 
 
@@ -239,34 +300,7 @@ def make_links(link_dir, links):
     )
 
 
-def clean_link_dir(link_dir):
-    """Will remove any broken links and empty directories"""
-    __log__.info("Cleaning link directory")
-
-    broken, empty = 0, 0
-    for dirpath, dirs, files in os.walk(link_dir, topdown=False, followlinks=False):
-        for f in files:
-            path = os.path.join(dirpath, f)
-            if os.path.islink(path) and not os.path.exists(os.readlink(path)):
-                # Broken symlink, remove
-                with contextlib.suppress(OSError):
-                    os.remove(path)
-                    broken += 1
-                    __log__.debug("Deleted broken symlink: %s", path)
-
-        # Attempt to rmdir everything on the way up and catch the OSErrors
-        with contextlib.suppress(OSError):
-            os.rmdir(dirpath)
-            empty += 1
-            __log__.debug("Deleted empty directory: %s", dirpath)
-
-    __log__.info(
-        "Deleted %d broken symlinks and %d empty directories",
-        broken, empty
-    )
-
-
-def make_symfarm(*, music_dir, link_dir, clean=False):
+def make_symfarm(*, music_dir, link_dir, clean=True, rescan_existing=False):
     """Main entry point"""
     music_dir = Path(music_dir).resolve()
     link_dir = Path(link_dir).resolve()
@@ -274,11 +308,12 @@ def make_symfarm(*, music_dir, link_dir, clean=False):
     if Path(os.path.commonpath((music_dir, link_dir))) == music_dir:
         raise ValueError("Link directory must not be inside the music directory")
 
-    if clean:
-        clean_link_dir(link_dir)
+    existing = process_linkdir(
+        link_dir, music_dir, existing=not rescan_existing, clean=clean
+    )
 
     __log__.info("Scanning music files in '%s'", music_dir)
-    songs = get_songs(music_dir)
+    songs = get_songs(music_dir, existing)
     albums = group_by_album(songs)
     links = get_links(albums)
     make_links(link_dir, links)

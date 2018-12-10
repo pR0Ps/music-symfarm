@@ -19,7 +19,7 @@ Details
 
 Before/After Example
 ----------------------
-Before - a gross mess of inconsistency:
+Before - a gross mess of inconsistency (exaggerated for effect):
 ```bash
 $ tree ~/Music/
 "~/Music"
@@ -38,8 +38,11 @@ $ tree ~/Music/
 
 Run the program:
 ```bash
-$ music-symfarm ~/Music/ ~/symfarm/music
-[INFO] Found 5 valid songs (7 total files, 2 ignored, 0 failed)
+$ music-symfarm ~/Music ~/symfarm/music
+[INFO] Processing existing symlinks in '~/symfarm/music'
+[INFO] Found 0 existing valid symlinks
+[INFO] Scanning music files in '~/Music'
+[INFO] Found 5 new songs (7 total files, 0 already linked, 2 ignored, 0 failed)
 [INFO] Grouped 5 songs into 3 albums
 [INFO] Created 5 new symlinks (0 updated, 0 preexisting, 0 failed)
 [INFO] Done!
@@ -75,7 +78,7 @@ Usage
 -----
 ```bash
 $ music-symfarm --help
-usage: music-symfarm [-h] [--clean]
+usage: music-symfarm [-h] [--clean] [--rescan-existing]
                      [--log {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
                      music_dir link_dir
 
@@ -89,6 +92,7 @@ optional arguments:
   -h, --help            show this help message and exit
   --clean               Clean the link directory of broken links and empty
                         directories
+  --rescan-existing     Rescan files that already have links pointing to them
   --log {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         Set the logging level (default: INFO)
 ```

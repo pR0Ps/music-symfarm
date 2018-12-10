@@ -268,8 +268,8 @@ def clean_link_dir(link_dir):
 
 def make_symfarm(*, music_dir, link_dir, clean=False):
     """Main entry point"""
-    music_dir = Path(music_dir)
-    link_dir = Path(link_dir)
+    music_dir = Path(music_dir).resolve()
+    link_dir = Path(link_dir).resolve()
 
     if Path(os.path.commonpath((music_dir, link_dir))) == music_dir:
         raise ValueError("Link directory must not be inside the music directory")

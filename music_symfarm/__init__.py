@@ -77,14 +77,14 @@ def get_year(tags, disp=False):
 
 def get_disc(tags, disp=False):
     num = try_keys(tags, ["DISCNUMBER", "DISKNUMBER", "DISC", "DISK"])
-    with contextlib.suppress(TypeError, AttributeError):
+    with contextlib.suppress(TypeError, ValueError, AttributeError):
         return int(num.split("/")[0])
     return 1 if disp else None
 
 
 def get_tracknumber(tags, disp=False):
     num = tags.get("TRACKNUMBER", None)
-    with contextlib.suppress(TypeError, AttributeError):
+    with contextlib.suppress(TypeError, ValueError, AttributeError):
         return int(num.split("/")[0])
     return 0 if disp else None
 
@@ -277,6 +277,7 @@ def make_symfarm(*, music_dir, link_dir, clean=False):
     if clean:
         clean_link_dir(link_dir)
 
+    __log__.info("Scanning music files in '%s'", music_dir)
     songs = get_songs(music_dir)
     albums = group_by_album(songs)
     links = get_links(albums)

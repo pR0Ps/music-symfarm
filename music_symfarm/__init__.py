@@ -274,6 +274,8 @@ def make_links(link_dir, links):
             )
             failed += 1
             continue
+
+        is_update = False
         if os.path.exists(link_path):
             if os.readlink(link_path) == source:
                 # exists and is already pointing at the correct file
@@ -281,12 +283,14 @@ def make_links(link_dir, links):
                 continue
             else:
                 # incorrect link, remove it so it can be recreated
-                updated += 1
-                created -= 1
+                is_update = True
                 os.remove(link_path)
         try:
             os.symlink(src=source, dst=link_path)
-            created += 1
+            if is_update:
+                updated += 1
+            else:
+                created += 1
         except OSError as e:
             __log__.warning(
                 "Failed to symlink '%s' --> '%s': %s", link_path, source, e

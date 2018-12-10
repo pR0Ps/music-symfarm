@@ -105,7 +105,7 @@ def get_songs(music_dir):
                 __log__.warning("Failed to parse tags from file: '%s'", path)
                 failed += 1
                 continue
-            tags = {k: v[0] for k, v in tags.items() if v}
+            tags = {k: v[0].strip() for k, v in tags.items() if v}
             tags["path"] = path
             tags["ext"] = path.rsplit(".", 1)[-1]
             __log__.debug("Scraped tags from file: '%s'", path)

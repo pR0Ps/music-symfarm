@@ -174,7 +174,7 @@ def get_songs(music_dir, existing=None):
             yield tags
 
     __log__.info(
-        "Found %d new songs (%d total files, %d already linked, %d ignored, %d failed)",
+        "Found %d new songs (%d total files, %d already linked, %d non-music files ignored, %d failed)",
         success, success + ignored + linked + failed, linked, ignored, failed
     )
 
@@ -194,7 +194,7 @@ def album_id(tags):
 def group_by_album(songs):
     """Group songs by albums and yield the groups"""
     albums = defaultdict(list)
-    num = 0
+    num = -1
     for num, song in enumerate(songs):
         albums[album_id(song)].append(song)
 

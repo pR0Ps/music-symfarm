@@ -12,7 +12,7 @@ import taglib
 
 INVALID_CHAR_MAP = str.maketrans('<>:\/|"', "[]----'", "?*")
 MUSIC_FILE_REGEX = re.compile(".+\.(flac|mp3|ogg|oga|wma)", re.IGNORECASE)
-STRUCTURE = ["{ALBUMARTIST}", "{ALBUM} ({YEAR})"]
+STRUCTURE = "{ALBUMARTIST}/{ALBUM} ({YEAR})"
 TRACK_FMT = "{TRACKNUMBER:02d} - {TITLE}.{ext}"
 COMPILATION_TRACK_FMT = "{TRACKNUMBER:02d} - {ARTIST} - {TITLE}.{ext}"
 DISCNUM_PREFIX_FMT = "{DISCNUMBER}-"
@@ -167,8 +167,10 @@ def get_songs(music_dir, existing=None):
                 failed += 1
                 continue
             tags = {k: v[0].strip() for k, v in tags.items() if v}
-            tags["path"] = path
+            tags["abspath"] = path
+            tags["path"] = os.path.relpath(path, music_dir)
             tags["ext"] = path.rsplit(".", 1)[-1]
+            tags["filename"] = f
             __log__.debug("Scraped tags from file: '%s'", path)
             success += 1
             yield tags
@@ -219,6 +221,18 @@ TRACK_MAPPING = {
 }
 
 
+def is_compilation(album):
+    """Test if an album is a compilation"""
+
+    # Some tagging software uses COMPILATION="1" to mark a compilation
+    comps = [s.get("COMPILATION") for s in album]
+    if all_same(comps) and comps[0] == "1":
+        return True
+
+    # No consistent is_compilation properties set, fall back to checking artist names
+    return not all_same(get_artist(s) for s in album)
+
+
 def get_links(albums):
     """Generates (dst link, src file) pairs for each song in each album"""
 
@@ -233,28 +247,35 @@ def get_links(albums):
         # Figure out the format to use for the tracks
 
         # Check for multi-artist album (compilation)
-        if all_same(get_artist(s) for s in album):
-            track_fmt = TRACK_FMT
-        else:
+        if is_compilation(album):
+            album_track_fmt = COMPILATION_TRACK_FMT
             album_tags["ALBUMARTIST"] = MULTIPLE_ARTISTS
-            track_fmt = COMPILATION_TRACK_FMT
+        else:
+            album_track_fmt = TRACK_FMT
 
         # Check for multidisc
-        if len(set(get_disc(s) for s in album)) > 1:
-            track_fmt = DISCNUM_PREFIX_FMT + track_fmt
+        multidisc = not all_same(get_disc(s) for s in album)
 
         for song in album:
+            # Use the album track formatting rules unless otherwise specified
+            track_fmt = album_track_fmt
+
             for key, fcn in TRACK_MAPPING.items():
                 song[key] = fcn(song, disp=True)
 
             # Override song tags with the album-level version
             song.update(album_tags)
 
+            if multidisc:
+                track_fmt = DISCNUM_PREFIX_FMT + track_fmt
+
+            path_format = "{}/{}".format(STRUCTURE, track_fmt)
+
             link_name = os.sep.join(
                 path_comp.format(**song).translate(INVALID_CHAR_MAP)
-                for path_comp in STRUCTURE + [track_fmt]
+                for path_comp in path_format.split("/")
             )
-            yield (link_name, song["path"])
+            yield (link_name, song["abspath"])
 
 
 def make_links(link_dir, links):

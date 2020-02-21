@@ -89,7 +89,17 @@ def get_tracknumber(tags, disp=False):
     return 0 if disp else None
 
 
-def process_linkdir(link_dir, music_dir, existing=True, clean=True):
+def symlink_info(link_path):
+    """Read path from a symlink, properly handling relative paths
+
+    Returns the absolute path the symlink points at and if the symlink is relative
+    """
+    link_target = os.path.join(os.path.abspath(os.path.dirname(link_path)), os.readlink(link_path))
+    abs_path = os.path.normpath(link_target)
+    return abs_path, (link_target != abs_path)
+
+
+def process_linkdir(link_dir, music_dir, existing=True, clean=True, relative_links=False):
     """Process data in the link directory
 
     If existing is True (default), will return a set of paths in music_dir
@@ -111,7 +121,7 @@ def process_linkdir(link_dir, music_dir, existing=True, clean=True):
             if not os.path.islink(path):
                 continue
 
-            target = os.readlink(path)
+            target, is_relative = symlink_info(path)
             if not os.path.exists(target):
                 if clean:
                     # Broken symlink, remove
@@ -119,7 +129,8 @@ def process_linkdir(link_dir, music_dir, existing=True, clean=True):
                         os.remove(path)
                         broken += 1
                         __log__.debug("Deleted broken symlink: %s", path)
-            elif existing and Path(os.path.commonpath((music_dir, target))) == music_dir:
+            elif existing and Path(os.path.commonpath((music_dir, target))) == music_dir and is_relative == relative_links:
+                # exists, inside the music dir, and proper link type
                 exist.add(target)
 
         # Attempt to rmdir everything on the way up and catch the OSErrors
@@ -278,7 +289,7 @@ def get_links(albums):
             yield (link_name, song["abspath"])
 
 
-def make_links(link_dir, links):
+def make_links(link_dir, links, relative_links=False):
     """Make symlinks for each (name, source) pair in links
 
     Will make any required directories and only overwrite existing symlinks if required
@@ -298,8 +309,9 @@ def make_links(link_dir, links):
 
         is_update = False
         if os.path.exists(link_path):
-            if os.readlink(link_path) == source:
-                # exists and is already pointing at the correct file
+            target, is_relative = symlink_info(link_path)
+            if target == source and is_relative == relative_links:
+                # exists and is already pointing at the correct file in the correct way
                 existed += 1
                 continue
             else:
@@ -307,7 +319,11 @@ def make_links(link_dir, links):
                 is_update = True
                 os.remove(link_path)
         try:
-            os.symlink(src=source, dst=link_path)
+            if relative_links:
+                os.symlink(src=os.path.relpath(source, start=os.path.dirname(link_path)), dst=link_path)
+            else:
+                os.symlink(src=source, dst=link_path)
+
             if is_update:
                 updated += 1
             else:
@@ -325,7 +341,7 @@ def make_links(link_dir, links):
     )
 
 
-def make_symfarm(*, music_dir, link_dir, clean=True, rescan_existing=False):
+def make_symfarm(*, music_dir, link_dir, clean=True, rescan_existing=False, relative_links=False):
     """Main entry point"""
     music_dir = Path(music_dir).resolve()
     link_dir = Path(link_dir).resolve()
@@ -334,12 +350,12 @@ def make_symfarm(*, music_dir, link_dir, clean=True, rescan_existing=False):
         raise ValueError("Link directory must not be inside the music directory")
 
     existing = process_linkdir(
-        link_dir, music_dir, existing=not rescan_existing, clean=clean
+        link_dir, music_dir, existing=not rescan_existing, clean=clean, relative_links=relative_links
     )
 
     __log__.info("Scanning music files in '%s'", music_dir)
     songs = get_songs(music_dir, existing)
     albums = group_by_album(songs)
     links = get_links(albums)
-    make_links(link_dir, links)
+    make_links(link_dir, links, relative_links=relative_links)
     __log__.info("Done!")

@@ -182,7 +182,7 @@ def get_songs(music_dir, existing=None):
             tags["path"] = os.path.relpath(path, music_dir)
             tags["ext"] = path.rsplit(".", 1)[-1]
             tags["filename"] = f
-            __log__.debug("Scraped tags from file: '%s'", path)
+            __log__.debug("Scraped tags from file: '%s':\n%r", path, tags)
             success += 1
             yield tags
 

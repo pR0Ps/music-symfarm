@@ -235,9 +235,13 @@ def is_compilation(album):
     """Test if an album is a compilation"""
 
     # Some tagging software uses COMPILATION="1" to mark a compilation
+    # Support that and some other possible options
     comps = [s.get("COMPILATION") for s in album]
-    if all_same(comps) and comps[0] == "1":
-        return True
+    if all_same(comps) and comps[0] is not None:
+        if comps[0].lower() in {"1", "yes", "true"}:
+            return True
+        if comps[0].lower() in {"0", "no", "false"}:
+            return False
 
     # No consistent is_compilation properties set, fall back to checking artist names
     return not all_same(get_artist(s) for s in album)

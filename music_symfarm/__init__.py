@@ -12,11 +12,11 @@ import taglib
 
 INVALID_CHAR_MAP = str.maketrans('<>:\/|"', "[]----'", "?*")
 MUSIC_FILE_REGEX = re.compile(".+\.(flac|mp3|ogg|oga|wma)", re.IGNORECASE)
-STRUCTURE = "{ALBUMARTIST}/{ALBUM} ({YEAR})"
+FOLDER_FMT = "{ALBUMARTIST}/{ALBUM} ({YEAR})"
+FOLDER_COMPILATION_FMT = "Various Artists/{ALBUM} ({YEAR})"
 TRACK_FMT = "{TRACKNUMBER:02d} - {TITLE}.{ext}"
-COMPILATION_TRACK_FMT = "{TRACKNUMBER:02d} - {ARTIST} - {TITLE}.{ext}"
+TRACK_COMPILATION_FMT = "{TRACKNUMBER:02d} - {ARTIST} - {TITLE}.{ext}"
 DISCNUM_PREFIX_FMT = "{DISCNUMBER}-"
-MULTIPLE_ARTISTS = "Various Artists"
 UNKNOWN_ARTIST = "Unknown Artist"
 UNKNOWN_ALBUM = "Unknown Album"
 UNKNOWN_TITLE = "Unknown Title"
@@ -198,10 +198,9 @@ def album_id(tags):
     In other words, this has to be the same for all songs on an album
     """
     # Uses lowercase album name, date, and albumartist
-    return tuple(map(
-        lambda x: x.lower() if x else x,
+    return tuple(x.lower() if x else x for x in
         (get_album(tags), get_date(tags), get_albumartist(tags))
-    ))
+    )
 
 
 def group_by_album(songs):
@@ -256,11 +255,13 @@ def get_links(albums):
         }
 
         # Figure out the format to use for the tracks
+        album_fmt = FOLDER_FMT
 
         # Check for multi-artist album (compilation)
         if is_compilation(album):
-            album_track_fmt = COMPILATION_TRACK_FMT
-            album_tags["ALBUMARTIST"] = MULTIPLE_ARTISTS
+            album_track_fmt = TRACK_COMPILATION_FMT
+            album_fmt = FOLDER_COMPILATION_FMT
+            album_tags["ALBUMARTIST"] = ""
         else:
             album_track_fmt = TRACK_FMT
 
@@ -280,7 +281,7 @@ def get_links(albums):
             if multidisc:
                 track_fmt = DISCNUM_PREFIX_FMT + track_fmt
 
-            path_format = "{}/{}".format(STRUCTURE, track_fmt)
+            path_format = "{}/{}".format(album_fmt, track_fmt)
 
             link_name = os.sep.join(
                 path_comp.format(**song).translate(INVALID_CHAR_MAP)

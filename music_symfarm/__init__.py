@@ -2,21 +2,17 @@
 
 from collections import defaultdict
 import contextlib
+import itertools
 import logging
 import os
 from pathlib import Path
 import re
 
+import pkg_resources
 import taglib
+import yaml
 
 
-INVALID_CHAR_MAP = str.maketrans('<>:\/|"', "[]----'", "?*")
-MUSIC_FILE_REGEX = re.compile(".+\.(flac|mp3|ogg|oga|wma)", re.IGNORECASE)
-FOLDER_FMT = "{ALBUMARTIST}/{ALBUM} ({YEAR})"
-FOLDER_COMPILATION_FMT = "Various Artists/{ALBUM} ({YEAR})"
-TRACK_FMT = "{TRACKNUMBER:02d} - {TITLE}.{ext}"
-TRACK_COMPILATION_FMT = "{TRACKNUMBER:02d} - {ARTIST} - {TITLE}.{ext}"
-DISCNUM_PREFIX_FMT = "{DISCNUMBER}-"
 UNKNOWN_ARTIST = "Unknown Artist"
 UNKNOWN_ALBUM = "Unknown Album"
 UNKNOWN_TITLE = "Unknown Title"
@@ -160,17 +156,18 @@ def process_linkdir(link_dir, music_dir, existing=True, clean=True, relative_lin
     return None
 
 
-def get_songs(music_dir, existing=None):
+def get_songs(music_dir, valid_files, *, existing=None):
     """Scrape through the music directory and yield indvidual songs
 
     If existing is provided, all paths in it will be ignored
     """
 
     existing = existing or set()
+    file_regexes = [re.compile(x) for x in valid_files]
     success, linked, ignored, failed = 0, 0, 0, 0
     for dirpath, dirs, files in os.walk(music_dir):
         for f in files:
-            if not MUSIC_FILE_REGEX.fullmatch(f):
+            if not any(x.fullmatch(f) for x in file_regexes):
                 ignored += 1
                 continue
 
@@ -254,8 +251,10 @@ def is_compilation(album):
     return not all_same(get_artist(s) for s in album)
 
 
-def get_links(albums):
+def get_links(albums, structure: dict):
     """Generates (dst link, src file) pairs for each song in each album"""
+
+    charmap = str.maketrans(*structure["character_replace"], structure["character_strip"])
 
     for album in albums:
         # Use the album information from the first song's data. This prevents
@@ -266,15 +265,15 @@ def get_links(albums):
         }
 
         # Figure out the format to use for the tracks
-        album_fmt = FOLDER_FMT
+        album_fmt = structure["folder"]
 
         # Check for multi-artist album (compilation)
         if is_compilation(album):
-            album_track_fmt = TRACK_COMPILATION_FMT
-            album_fmt = FOLDER_COMPILATION_FMT
+            album_track_fmt = structure["file_compilation"]
+            album_fmt = structure["folder_compilation"]
             album_tags["ALBUMARTIST"] = ""
         else:
-            album_track_fmt = TRACK_FMT
+            album_track_fmt = structure["file"]
 
         # Check for multidisc
         multidisc = not all_same(get_disc(s) for s in album)
@@ -290,12 +289,12 @@ def get_links(albums):
             song.update(album_tags)
 
             if multidisc:
-                track_fmt = DISCNUM_PREFIX_FMT + track_fmt
+                track_fmt = structure["file_disc_prefix"] + track_fmt
 
             path_format = "{}/{}".format(album_fmt, track_fmt)
 
             link_name = os.sep.join(
-                path_comp.format(**song).translate(INVALID_CHAR_MAP)
+                path_comp.format(**song).translate(charmap)
                 for path_comp in path_format.split("/")
             )
             yield (link_name, song["abspath"])
@@ -362,8 +361,8 @@ def make_links(link_dir, links, relative_links=False):
     )
 
 
-def make_symfarm(*, music_dir, link_dir, clean=True, rescan_existing=False, relative_links=False):
-    """Main entry point"""
+def _make_symfarm(*, music_dir, link_dir, clean, rescan_existing, relative_links, structure, valid_files):
+    """Main entry point - all options are required in full"""
     music_dir = Path(music_dir).resolve()
     link_dir = Path(link_dir).resolve()
 
@@ -375,8 +374,26 @@ def make_symfarm(*, music_dir, link_dir, clean=True, rescan_existing=False, rela
     )
 
     __log__.info("Scanning music files in '%s'", music_dir)
-    songs = get_songs(music_dir, existing)
+    songs = get_songs(music_dir, valid_files, existing=existing)
     albums = group_by_album(songs)
-    links = get_links(albums)
+    links = get_links(albums, structure)
     make_links(link_dir, links, relative_links=relative_links)
     __log__.info("Done!")
+
+
+def make_symfarm(*, music_dir, link_dir, **kwargs):
+    """Make a symfarm
+
+    Loads default values from the config file.
+    """
+    defaults = yaml.safe_load(pkg_resources.resource_stream(__name__, "defaults.yaml"))
+
+    params = {
+        "music_dir": music_dir,
+        "link_dir": link_dir,
+    }
+
+    for k, v in (itertools.chain(defaults.pop("options").items(), defaults.items())):
+        params[k] = kwargs[k] if k in kwargs else v
+
+    _make_symfarm(**params)

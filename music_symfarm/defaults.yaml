@@ -1,0 +1,27 @@
+
+# This config file contains the default configuration for music-symfarm
+# To change these values, copy this file, make your modifications, and provide
+# the path to it using the command line.
+
+# Defaults for main options (implemented as CLI flags)
+options:
+  clean: True
+  rescan_existing: False
+  relative_links: False
+
+# A list of regular expressions to select files to process
+# Only one must match for a file to be accepted
+valid_files:
+  - '(?i:.+\.(flac|mp3|ogg|oga|wma))'
+
+# Various templates that control the structure of the symlinks
+structure:
+  folder: '{ALBUMARTIST}/{ALBUM} ({YEAR})'
+  folder_compilation: 'Various Artists/{ALBUM} ({YEAR})'
+  file: '{TRACKNUMBER:02d} - {TITLE}.{ext}'
+  file_compilation: '{TRACKNUMBER:02d} - {ARTIST} - {TITLE}.{ext}'
+  file_disc_prefix: '{DISCNUMBER}-'
+  character_strip: "?*"
+  character_replace:
+    - '<>:\/|'
+    - '[]----'

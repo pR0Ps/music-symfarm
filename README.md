@@ -85,7 +85,8 @@ Usage
 -----
 ```bash
 $ music-symfarm --help
-usage: music-symfarm [-h] [--clean] [--rescan-existing] [--relative-links]
+usage: music-symfarm [-h] [--conf CONF] [--clean] [--rescan-existing]
+                     [--relative-links]
                      [--log {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
                      music_dir link_dir
 
@@ -97,10 +98,15 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  --clean               Clean the link directory of broken links and empty
-                        directories
-  --rescan-existing     Rescan files that already have links pointing to them
-  --relative-links      Use relative paths for links (default: absolute paths)
+  --conf CONF           A config file to override default settings
+  --clean, --no-clean   Clean the link directory of broken links and empty
+                        directories? (default: True)
+  --rescan-existing, --no-rescan-existing
+                        Rescan files that already have links pointing to them?
+                        (default: False)
+  --relative-links, --no-relative-links
+                        Use relative paths for links instead of absolute?
+                        (default: False)
   --log {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         Set the logging level (default: INFO)
 ```

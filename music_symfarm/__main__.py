@@ -135,7 +135,7 @@ def main():
 
         _make_symfarm(**opts, **config)
     except Exception as e:
-        __log__.exception(str(e))
+        __log__.exception("%s: %s", type(e).__name__, str(e))
         sys.exit(1)
     else:
         sys.exit(0)

@@ -10,12 +10,15 @@ Details
 -------
 - The source music file/folder structure is not used in any way. A single folder of files will work
   in the same way that a highly nested collection would.
-- The only exception to the above rule is that the file extension is name is used to filter out
-  non-music files.
 - The source music is assumed to be properly tagged in a way that the program can understand (see
   [TagLib](http://taglib.org/) for more info).
 - Grouping tracks into albums is done by using the album name, year, and albumartist metadata within
   the individual tracks (case-insensitive comparisons are used).
+- While the default options should be fine for most collections, pretty much everything (which
+  filetypes to process, symlink structure, what text to use if data is missing, custom tag
+  overrides, etc) can be configured.
+- The included [defaults.yaml](./music_symfarm/defaults.yaml) config file contains the default
+  configuration along with documentation on what each option does and how to change it.
 
 Before/After Example
 ----------------------

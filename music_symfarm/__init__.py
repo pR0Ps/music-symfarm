@@ -99,6 +99,13 @@ def symlink_info(link_path):
     return abs_path, (link_target != abs_path)
 
 
+def in_directory(directory, path):
+    """Check that the path is inside the directory"""
+    # Note: Don't use Path.resolve since it follows symlinks
+    path = Path(os.path.abspath(path))
+    return directory != path and Path(os.path.commonpath((directory, path))) == directory
+
+
 def process_linkdir(link_dir, music_dir, existing=True, clean=True, relative_links=False):
     """Process data in the link directory
 
@@ -129,7 +136,7 @@ def process_linkdir(link_dir, music_dir, existing=True, clean=True, relative_lin
                         os.remove(path)
                         broken += 1
                         __log__.debug("Deleted broken symlink: %s", path)
-            elif existing and Path(os.path.commonpath((music_dir, target))) == music_dir and is_relative == relative_links:
+            elif existing and in_directory(music_dir, target) and is_relative == relative_links:
                 # exists, inside the music dir, and proper link type
                 exist.add(target)
 
@@ -302,7 +309,16 @@ def make_links(link_dir, links, relative_links=False):
     existed, updated, created, failed = 0, 0, 0, 0
     for link, source in links:
         __log__.debug("%s ---> %s", link, source)
+
         link_path = link_dir.joinpath(link)
+        if not in_directory(link_dir, link_path):
+            __log__.warning(
+                "Failed to symlink '%s' --> '%s': outside the link directory",
+                link_path, source
+            )
+            failed += 1
+            continue
+
         try:
             os.makedirs(link_path.parent, exist_ok=True)
         except OSError as e:
@@ -351,8 +367,8 @@ def make_symfarm(*, music_dir, link_dir, clean=True, rescan_existing=False, rela
     music_dir = Path(music_dir).resolve()
     link_dir = Path(link_dir).resolve()
 
-    if Path(os.path.commonpath((music_dir, link_dir))) == music_dir:
-        raise ValueError("Link directory must not be inside the music directory")
+    if music_dir == link_dir or in_directory(music_dir, link_dir):
+        raise ValueError("Link directory must be outside the music directory")
 
     existing = process_linkdir(
         link_dir, music_dir, existing=not rescan_existing, clean=clean, relative_links=relative_links

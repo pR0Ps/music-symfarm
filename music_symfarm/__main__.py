@@ -72,7 +72,7 @@ def parse_args():
 
     add_arg = functools.partial(add_argument, parser)
 
-    add_arg("music_dir", help="Music source directory")
+    add_arg("music_dirs", nargs="+", metavar="music_dir", help="Music source directories")
     add_arg("link_dir", help="Directory where the symlinks will be created")
     add_arg(
         "--conf",

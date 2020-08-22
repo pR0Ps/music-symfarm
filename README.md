@@ -91,12 +91,12 @@ $ music-symfarm --help
 usage: music-symfarm [-h] [--conf CONF] [--clean] [--rescan-existing]
                      [--relative-links]
                      [--log {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
-                     music_dir link_dir
+                     music_dir [music_dir ...] link_dir
 
 Create a directory of symlinks based solely on music tags
 
 positional arguments:
-  music_dir             Music source directory
+  music_dir             Music source directories
   link_dir              Directory where the symlinks will be created
 
 optional arguments:

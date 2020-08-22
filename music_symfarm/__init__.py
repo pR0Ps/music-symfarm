@@ -197,11 +197,11 @@ def in_directory(directory, path):
     return directory != path and Path(os.path.commonpath((directory, path))) == directory
 
 
-def process_linkdir(link_dir, music_dir, *, existing=True, clean=True, relative_links=False):
+def process_linkdir(link_dir, music_dirs, *, existing=True, clean=True, relative_links=False):
     """Process data in the link directory
 
-    If existing is True (default), will return a set of paths in music_dir
-    that are symlinked from files in the link_dir
+    If existing is True (default), will return a set of paths in any of the
+    music_dirs that are symlinked from files in the link_dir
 
     If clean is True (default), will remove any broken links and empty
     directories
@@ -227,8 +227,11 @@ def process_linkdir(link_dir, music_dir, *, existing=True, clean=True, relative_
                         os.remove(path)
                         broken += 1
                         __log__.debug("Deleted broken symlink: %s", path)
-            elif existing and in_directory(music_dir, target) and is_relative == relative_links:
-                # exists, inside the music dir, and proper link type
+            elif (existing and
+                  is_relative == relative_links and
+                  any(in_directory(x, target) for x in music_dirs)
+            ):
+                # exists, is the proper link type, and links to within a music_dir
                 exist.add(target)
 
         # Attempt to rmdir everything on the way up and catch the OSErrors
@@ -258,6 +261,7 @@ def get_songs(music_dir, valid_files, *, overrides=None,
     If existing is provided, all paths in it will be ignored
     """
 
+    __log__.info("Scanning music files in '%s'", music_dir)
     existing = existing or set()
     file_regexes = [re.compile(x) for x in valid_files]
     success, linked, ignored, failed = 0, 0, 0, 0
@@ -487,27 +491,40 @@ def make_links(link_dir, links, *, relative_links=False):
     )
 
 
-def _make_symfarm(*, music_dir, link_dir, clean: bool, rescan_existing: bool, relative_links: bool,
+def _make_symfarm(*, music_dirs, link_dir, clean: bool, rescan_existing: bool, relative_links: bool,
                   structure, valid_files, overrides, tagmap, fallbacks):
     """Main entry point - all options are required in full"""
-    music_dir = Path(music_dir).resolve()
+    music_dirs = set(Path(x).resolve() for x in music_dirs)
     link_dir = Path(link_dir).resolve()
 
     # Convert the overrides to Override objects
     overrides = [Override(*x) for x in (overrides or [])]
 
-    if music_dir == link_dir or in_directory(music_dir, link_dir):
-        raise ValueError("Link directory must be outside the music directory")
+    # Remove any music dirs that are subdirectores of other music dirs
+    for md1, md2 in itertools.permutations(music_dirs, 2):
+        if md2 in music_dirs and in_directory(md1, md2):
+            __log__.debug(
+                "Removing directory '%s' (will be scanned as part of '%s')",
+                md2, md1
+            )
+            music_dirs.remove(md2)
+
+    # Check the link directory isn't inside any music directories
+    if any(x == link_dir or in_directory(x, link_dir) for x in music_dirs):
+        raise ValueError(
+            f"Link directory {link_dir} must not be a subdirectory of any music dirs"
+        )
 
     existing = process_linkdir(
-        link_dir, music_dir, existing=not rescan_existing, clean=clean,
+        link_dir, music_dirs, existing=not rescan_existing, clean=clean,
         relative_links=relative_links
     )
 
-    __log__.info("Scanning music files in '%s'", music_dir)
-    songs = get_songs(
-        music_dir, valid_files, overrides=overrides, tagmap=tagmap,
-        fallbacks=fallbacks, existing=existing
+    songs = itertools.chain.from_iterable(
+        get_songs(
+            music_dir, valid_files, overrides=overrides, tagmap=tagmap,
+            fallbacks=fallbacks, existing=existing
+        ) for music_dir in music_dirs
     )
     albums = group_by_album(songs, tagmap=tagmap)
     links = get_links(albums, structure=structure, tagmap=tagmap, fallbacks=fallbacks)
@@ -515,7 +532,7 @@ def _make_symfarm(*, music_dir, link_dir, clean: bool, rescan_existing: bool, re
     __log__.info("Done!")
 
 
-def make_symfarm(*, music_dir, link_dir, **kwargs):
+def make_symfarm(*, music_dirs, link_dir, **kwargs):
     """Make a symfarm
 
     Loads default values from the config file.
@@ -523,7 +540,7 @@ def make_symfarm(*, music_dir, link_dir, **kwargs):
     defaults = yaml.safe_load(pkg_resources.resource_stream(__name__, "defaults.yaml"))
 
     params = {
-        "music_dir": music_dir,
+        "music_dirs": music_dirs,
         "link_dir": link_dir,
     }
 

@@ -1,0 +1,176 @@
+
+# This config file contains the default configuration for music-symfarm
+# To change these values, copy this file, make your modifications, and provide
+# the path to it using the command line.
+
+# Merging the config specified with --conf and these defaults is done at the
+# top-level only.
+# This means that if you specify a "structure" key, you need to specify all
+# keys in it, regardless of how many you actually want to change. This is why
+# it's recommended to just copy the entire file.
+
+
+# Defaults for main options (implemented as CLI flags)
+options:
+  clean: True
+  rescan_existing: False
+  relative_links: False
+
+
+# A list of regular expressions to select files to process
+# Only one must match for a file to be accepted
+valid_files:
+  - "(?i:.+\\.(flac|mp3|ogg|oga|wma))"
+
+
+# Various templates that control the structure of the symlinks
+structure:
+  # Path naming templates
+  path: "{ALBUMARTIST}/{ALBUM} ({year})"
+  path_compilation: "Various Artists/{ALBUM} ({year})"
+
+  # File naming templates
+  file: "{TRACKNUMBER:>02} - {TITLE}.{ext}"
+  file_compilation: "{TRACKNUMBER:>02} - {ARTIST} - {TITLE}.{ext}"
+
+  # Added to the front of the filename in the case of more than 1 disc
+  # file_disc_prefix: "Disc {DISCNUMBER}/"
+  file_disc_prefix: "{DISCNUMBER}-"
+
+  # Characters to strip from paths
+  character_strip: "?*"
+
+  # Defines a map of bad character to replacement to use in paths
+  character_replace:
+    - '<>:\/|'
+    - '[]----'
+
+
+# Map of tag name to all the tag names to try when asking for it.
+# Tags will be tried in order until one contains a non-empty result.
+# Note that the tag name itself will not be tried unless it is added to the list
+# ie: Use `DATE: ["DATE", "YEAR"]` vs `DATE: ["YEAR"]`
+tagmap:
+  DATE: ["ORIGINALDATE", "DATE", "YEAR"]
+  DISCNUMBER: ["DISCNUMBER", "DISKNUMBER", "DISC", "DISK"]
+  DISCTOTAL: ["DISCTOTAL", "DISKTOTAL", "TOTALDISCS", "TOTALDISKS"]
+  TRACKTOTAL: ["TRACKTOTAL", "TOTALTRACKS"]
+
+
+# Define some fallbacks to use in templates if the data cannot be found in the file
+# Supports template strings.
+# Can be used to create custom variables (ie: "year" is just a regex of "DATE").
+# When creating custom variables use lower case. This will prevent conflicts
+# with tags pulled from files (tags are alway uppercase)
+fallbacks:
+  year: "{DATE:/^(\\d+).*$/\\1/}"
+  ALBUMARTIST: "{ARTIST}"
+  ARTIST: "Unknown Artist"
+  ALBUM: "Unknown Album"
+  TITLE: "Track {TRACKNUMBER}"
+  DATE: "0000-00-00"
+  DISCNUMBER: 1
+  TRACKNUMBER: 0
+
+
+# The overrides section contains a list of overrides for the scanned music.
+# Generally:
+#  1. Match based on one or more criteria
+#  2. Apply one or more operations
+#  3. Order matters (all matching operations will be executed in the specified order)
+#
+# Selection criteria:
+#   - any metadata from the music
+#     - ARTIST, ALBUM, ALBUMARTIST, DATE, etc
+#   - `abspath`
+#     - The absolute path to the file
+#     - ex: "/home/user/music/songs/song.mp3"
+#   - `path`
+#     - The path to the file relative to the music directory
+#     - ex: "songs/song.mp3"
+#   - `filename`
+#     - The filename of the source file
+#     - ex: "song.mp3"
+#   - `ext`
+#     - The extension of the source file
+#     - ex: "mp3"
+#
+# Selections can be:
+#  - exact match
+#    - case sensitive
+#    - ex: "Some artist" (will match "Some artist" but not "Some Artist")
+#  - regex match
+#    - used by starting and ending the selection with "/"
+#    - Supports the full Python regex syntax
+#      - https://docs.python.org/3/library/re.html#regular-expression-syntax
+#    - Must completely match ("/art/" will NOT match "artist")
+#      - https://docs.python.org/3/library/re.html#re.fullmatch
+#    - case sensitive (the inline "i" flag can change this)
+#    - ex: "/[Ss]ome [Aa]rtist/"
+#          (matches "Some Artist", "Some artist", etc)
+#    - ex: "/(?i:some artist)/"
+#          (matches all case combinations of "Some Artist")
+#    - ex: "/Greatest Hits( \(Deluxe Edition\))?/"
+#          (will match "Greatest Hits" and "Greatest Hits (Deluxe Edition)")
+#
+# Operations:
+#  - consists of key/value pairs to set on the music
+#  - Keys:
+#    - any metadata keys:
+#      - ex: ARTIST, ALBUM, ALBUMARTIST, YEAR, etc
+#    - `preserve_filename`:
+#      - A bool that controls if the original filename is preserved in the symlink
+#      - The directory the symlink goes in is not affected
+#      - Can be overriden by `path_format`
+#    - `path_format`:
+#      - The full path format to use (relative to the output directory)
+#      - ex: "Other songs/{ext}/{filename}"
+#      - Will override all other settings that affect the path
+#    - `ignore`:
+#      - Don't link this file
+#    - `is_compilation`:
+#      - boolean that sets if the album is a compilation or not
+#      - Can also set the "COMPILATION" tag to "1" for True
+#
+#  - Values:
+#    - Processed as Python templates
+#    - See https://docs.python.org/3/library/string.html#formatspec
+#    - Any metadata from the song can be used by the template
+#      - ex: "{ARTIST}"
+#    - In addition, there is a regex formatter:
+#      - By using a format specifier like "/match/sub/<normal format spec>",
+#        the regex substitution will first be applied before the rest of the
+#        format spec is processed
+#      - ex: '{filename:/^(\d+).*$/\1/}' will take the "filename" value, pull
+#            the leading digits off it, and insert them into the value.
+#            This specific case is useful for assigning disc numbers to files
+#            based on the filename if they aren't included in the tags.
+#
+# Some full examples are provided below (note the position of the "-"s)
+#overrides:
+#  # Set the album artist based on the artist and album
+#  - - ARTIST: "A Band"
+#      ALBUM: "Greatest Hits"
+#    - ALBUMARTIST: "A Band"
+#
+#  # Ignore all music by a certain artist
+#  - - ARTIST: "Bad band"
+#    - ignore: True
+#
+#  # Directly set the final path of the symlinks
+#  # OC ReMix stores the game the music originated from in the ORIGINALALBUM tag
+#  - - ALBUM: "http://www.ocremix.org"
+#    - path_format: "OverClocked ReMix/{ORIGINALALBUM}/{filename}"
+#
+#  # Use regex to set disc numbers based on the filename
+#  - - ARTIST: "A Band"
+#      ALBUM: "Greatest Hits (2 disc edition)"
+#    - DISCNUMBER: "{filename:/^(\\d+).*$/\\1/}"
+#
+#  # Use regex to match a certain artist
+#  # (in this case it's being used to do a case-insensitive match)
+#  - - ALBUMARTIST: "/(?i:band of the year)/"
+#    - ALBUMARTIST: "Band of the Year"
+
+# No overrides configured by default
+overrides:

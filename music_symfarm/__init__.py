@@ -119,7 +119,7 @@ def try_keys(d, keys, default=None):
     return default
 
 
-def get_tag(tag, tags, *, tagmap, fallbacks=None):
+def get_tag(tag, tags, *, tagmap, fallbacks=None, default=None):
     """Gets the value of a tag
 
     If the tag (or mapped tags) do not exist and no fallback is specified for
@@ -159,7 +159,25 @@ def get_tag(tag, tags, *, tagmap, fallbacks=None):
     if data and tag in {"DISCNUMBER", "TRACKNUMBER"}:
         with contextlib.suppress(TypeError, ValueError, AttributeError):
             data = data.split("/")[0]
+    if data is None:
+        return default
     return data
+
+
+def get_consistent_tag(tag, songs, *, tagmap, fallbacks=None, exclude_missing=False):
+    """Get a tag only if the value of it is consistent across all songs
+
+    See get_tag
+    """
+    vals = [
+        get_tag(tag, s, tagmap=tagmap, fallbacks=fallbacks, default=None)
+        for s in songs
+    ]
+    if exclude_missing:
+        vals = [x for x in vals if x is not None]
+    if vals and all_same(vals):
+        return vals[0]
+    return None
 
 
 def format_template(template, data, *, tagmap, fallbacks=None):
@@ -307,8 +325,9 @@ def album_id(tags, *, tagmap):
     This ID will be the same for all songs on an album
     """
     # Lowercase to prevent capitalization from making different albums
-    return tuple(tag.lower() if tag else tag for tag in
-        (get_tag(tn, tags, tagmap=tagmap) for tn in ALBUM_TAGS)
+    return tuple(
+        get_tag(tn, tags, tagmap=tagmap, default="").lower()
+        for tn in ALBUM_TAGS
     )
 
 
@@ -327,45 +346,6 @@ def group_by_album(songs, *, tagmap):
         yield songs
 
 
-def to_bool(val):
-    """Convert a tag to a boolean
-
-    Some tagging software uses numbers (ie. COMPILATION="1") to mark boolean
-    variable. This converts the common cases to True/False and returns None
-    if unsure.
-    """
-    if isinstance(val, bool):
-        return val
-    if isinstance(val, str):
-        if val.lower() in {"1", "yes", "true"}:
-            return True
-        elif val.lower() in {"0", "no", "false"}:
-            return False
-    return None
-
-
-def is_compilation(album, *, tagmap):
-    """Test if an album is a compilation"""
-
-    comps = [to_bool(s.get("COMPILATION")) for s in album]
-    if all_same(comps) and comps[0] is not None:
-        return comps[0]
-
-    comps = [to_bool(s.get("is_compilation")) for s in album]
-    if not all_same(comps):
-        __log__.warning(
-            "Inconsistent 'is_compilation' property for album '%s'",
-            get_tag("ALBUM", album[0], tagmap=tagmap)
-        )
-
-    comps = [x for x in comps if x is not None]
-    if comps and all_same(comps):
-        return comps[0]
-
-    # No consistent is_compilation properties set, fall back to checking artist names
-    return not all_same(get_tag("ARTIST", s, tagmap=tagmap) for s in album)
-
-
 def get_links(albums, *, structure, tagmap, fallbacks):
     """Generates (dst link, src file) pairs for each song in each album"""
 
@@ -374,22 +354,35 @@ def get_links(albums, *, structure, tagmap, fallbacks):
     for album in albums:
         # Use the album information from the first song's data. This prevents
         # issues where songs were grouped into the same album but the data was
-        # slightly different (ex: casing)
+        # cased differently (grouping is case-insensitive)
         album_tags = {
             tag: get_tag(tag, album[0], tagmap=tagmap, fallbacks=fallbacks)
             for tag in ALBUM_TAGS
         }
 
         # Figure out the format to use for the tracks
-        album_fmt = structure["path"]
+        multiartist = not all_same(
+            get_tag("ARTIST", s, tagmap=tagmap, default="").lower()
+            for s in album
+        )
+        if multiartist:
+            album_track_fmt = structure["file_multiartist"]
 
-        # Check for multi-artist album (compilation)
-        if is_compilation(album, tagmap=tagmap):
-            album_track_fmt = structure["file_compilation"]
-            album_fmt = structure["path_compilation"]
-            album_tags["ALBUMARTIST"] = ""
+            if bool(get_tag("ALBUMARTIST", album[0], tagmap=tagmap)):
+                # Not a compilation if an albumartist is set (probably an anthology)
+                album_fmt = structure["path"]
+            else:
+                # No albumartist set - assume a compilation
+                album_fmt = structure["path_compilation"]
         else:
+            # All same artist -> not a compilation
+            album_fmt = structure["path"]
             album_track_fmt = structure["file"]
+
+        # If the is_compilation override is used it overrides all the above logic
+        is_comp = get_consistent_tag("is_compilation", album, tagmap=tagmap)
+        if is_comp is not None:
+            album_fmt = structure["path_compilation"] if is_comp else structure["path"]
 
         # Check for multidisc
         multidisc = not all_same(get_tag("DISCNUMBER", s, tagmap=tagmap) for s in album)

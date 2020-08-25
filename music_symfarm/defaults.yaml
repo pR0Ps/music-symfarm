@@ -117,6 +117,8 @@ fallbacks:
 # Operations:
 #  - consists of key/value pairs to set on the music
 #  - Keys:
+#    - `debug`:
+#      - If set to true, the operation results will be logged out at the INFO level
 #    - any metadata keys:
 #      - ex: ARTIST, ALBUM, ALBUMARTIST, YEAR, etc
 #    - `preserve_filename`:

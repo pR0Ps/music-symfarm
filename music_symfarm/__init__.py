@@ -42,6 +42,7 @@ class Override:
     def __init__(self, rules, operations):
         self.rules = {k: self._make_rule(v) for k, v in rules.items()}
         self.operations = {k: self._make_operation(v) for k, v in operations.items()}
+        self.debug = self.operations.pop("debug", False)
 
     @staticmethod
     def _make_operation(operation):
@@ -76,6 +77,8 @@ class Override:
     def apply(self, tags, *, tagmap, fallbacks):
         """Apply the overrides to the tags (modifies tags in-place)"""
         if self.matches(tags, tagmap=tagmap):
+            if self.debug:
+                __log__.info("Song '%s' matched override %r ", tags["abspath"], self)
             for k, v in self.operations.items():
                 # Apply any formatting if the target is a string
                 # (treat empty string as None)
@@ -84,8 +87,12 @@ class Override:
 
                 if v is None:
                     # Pop tags that are an empty string or None out of the tags
+                    if self.debug:
+                        __log__.info("Removed '%s'", k)
                     tags.pop(k, None)
                 else:
+                    if self.debug:
+                        __log__.info("Set '%s' to '%s' (was '%s')", k, v, tags.get(k, "<unset>"))
                     tags[k] = v
 
     def __repr__(self):

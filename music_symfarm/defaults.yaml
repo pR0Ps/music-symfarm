@@ -104,6 +104,9 @@ fallbacks:
 #    - ex: "Some artist" (will match "Some artist" but not "Some Artist")
 #  - regex match
 #    - used by starting and ending the selection with "/"
+#    - Special characters:
+#      - The "/" character must be escaped ("\\/") to be used in a match
+#      - To use the "{" or "}" character, use "{{" or "}}" instead (like normal format strings)
 #    - Supports the full Python regex syntax
 #      - https://docs.python.org/3/library/re.html#regular-expression-syntax
 #    - Must completely match ("/art/" will NOT match "artist")
@@ -126,11 +129,11 @@ fallbacks:
 #    - `preserve_filename`:
 #      - A bool that controls if the original filename is preserved in the symlink
 #      - The directory the symlink goes in is not affected
-#      - Can be overriden by `path_format`
-#    - `path_format`:
-#      - The full path format to use (relative to the output directory)
-#      - ex: "Other songs/{ext}/{filename}"
+#      - Can be overridden by `path_template`
+#    - `path_template`:
+#      - The full path template to use (relative to the output directory)
 #      - Will override all other settings that affect the path
+#      - Ex: "Other songs/{ext}/{filename}"
 #    - `ignore`:
 #      - Don't link this file
 #    - `is_compilation`:
@@ -171,7 +174,7 @@ fallbacks:
 #  # Directly set the final path of the symlinks
 #  # OC ReMix stores the game the music originated from in the ORIGINALALBUM tag
 #  - - ALBUM: "http://www.ocremix.org"
-#    - path_format: "OverClocked ReMix/{ORIGINALALBUM}/{filename}"
+#    - path_template: "OverClocked ReMix/{ORIGINALALBUM}/{filename}"
 #
 #  # Use regex to set disc numbers based on the filename
 #  - - ARTIST: "A Band"

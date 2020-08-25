@@ -18,6 +18,16 @@ import yaml
 # Tags that have to be the same for songs to be considered in the same album
 ALBUM_TAGS = ("ALBUMARTIST", "ALBUM", "DATE")
 
+# Regex to split a string on "/"s, excluding those found in {}'s (but not {{}}'s)
+# NOTE: only works properly if the braces are balanced (ie. a valid format string)
+RE_TEMPLATE_SLASHES = re.compile(r"/(?=(?:}}|[^}])*(?:(?:$|{[^{])))")
+
+# Regex that matches non-escaped slashes
+RE_SLASHES = re.compile(r"(?<!\\)/")
+
+# Regex for matching regex-enabled format string replacements
+RE_FORMAT_STR_REGEX = re.compile("{(.*?):/(.+?)" + RE_SLASHES.pattern + "(.+?)" + RE_SLASHES.pattern + "(.*)}")
+
 
 __log__ = logging.getLogger(__name__)
 
@@ -26,10 +36,32 @@ class RegexFormatter(Formatter):
     """A string formatter that does regex substitutions
 
     Ex: {0:/pattern/repl/<other formatting options>}
+
+    To use the "/" character in the pattern or repl, escape it ("\\/")
+    To use "{" or "}" characters in the pattern or repl, use "{{" or "}}"
     """
+    def parse(self, format_string):
+        # Allow for including curly braces in formats by changing them to
+        # fullwidth versions for parsing and changing them back before yielding
+        # them.
+        esc = lambda x: x and x.replace("{{", "｛").replace("}}", "｝")
+        unesc = lambda x: x and x.replace("｛", "{{").replace("｝", "}}")
+        apply = lambda f, d, *n: tuple((x if i not in n else f(x)) for i, x in enumerate(d))
+        escmatch = lambda m: "{{{}:/{}/{}/{}}}".format(*apply(esc, m.groups(), 1, 2))
+
+        try:
+            format_string = RE_FORMAT_STR_REGEX.sub(escmatch, format_string)
+            for x in super().parse(format_string):
+                yield apply(unesc, x, 2)
+        except ValueError as e:
+            raise ValueError(f"Failed to parse format string '{format_string}'") from e
+
     def format_field(self, value, format_spec):
         if format_spec.startswith("/"):
-            _, pattern, repl, format_spec = format_spec.split("/", 3)
+            # Split on non-escaped forward slashes
+            _, pattern, repl, format_spec = RE_SLASHES.split(format_spec, maxsplit=3)
+            # Convert any escaped slashes to regular slashes for the regex sub
+            pattern, repl = (x.replace("\\/", "/") for x in (pattern, repl))
             value = re.sub(pattern, repl, value)
         return super().format_field(value, format_spec)
 
@@ -88,7 +120,8 @@ class Override:
             for k, v in self.operations.items():
                 # Apply any formatting if the target is a string
                 # (treat empty string as None)
-                if isinstance(v, str):
+                # Since path_template is meant to be a template, don't format it
+                if k != "path_template" and isinstance(v, str):
                     v = format_template(v, tags, tagmap=tagmap, fallbacks=fallbacks) or None
 
                 if v is None:
@@ -445,13 +478,17 @@ def get_links(albums, *, structure, tagmap, fallbacks):
             if song.get("preserve_filename"):
                 track_fmt = "{filename}"
 
-            path_format = song.get("path_format", "{}/{}".format(album_fmt, track_fmt))
+            path_template = song.get("path_template", "{}/{}".format(album_fmt, track_fmt))
+
+            # Make sure the path_template is valid before attempting formatting
+            # The following will raise an exception if it isn't
+            all(REGEX_FORMATTER.parse(path_template))
 
             link_name = os.sep.join(
                 format_template(
                     path_comp, song, tagmap=tagmap, fallbacks=fallbacks
                 ).translate(charmap)
-                for path_comp in path_format.split("/")
+                for path_comp in RE_TEMPLATE_SLASHES.split(path_template)
             )
             yield (link_name, song["abspath"])
 

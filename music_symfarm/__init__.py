@@ -53,7 +53,13 @@ class Override:
 
     @staticmethod
     def _make_rule(rule):
-        """Assume rules are a regex if they start and end with '/'"""
+        """Parse a rule
+
+        Assume rules are a regex if they start and end with '/'
+        Returns None, a regex pattern object or a string
+        """
+        if rule is None:
+            return rule
         rule = str(rule)
         if len(rule) > 2 and rule.startswith("/") and rule.endswith("/"):
             return re.compile(rule[1:-1])

@@ -97,6 +97,8 @@ fallbacks:
 #     - ex: "mp3"
 #
 # Selections can be:
+#  - null
+#    - matches if the tag isn't set
 #  - exact match
 #    - case sensitive
 #    - ex: "Some artist" (will match "Some artist" but not "Some Artist")
@@ -141,6 +143,7 @@ fallbacks:
 #        to keep them grouped into a single album.
 #
 #  - Values:
+#    - If a value is null, the tag will be removed from the song
 #    - Processed as Python templates
 #    - See https://docs.python.org/3/library/string.html#formatspec
 #    - Any metadata from the song can be used by the template

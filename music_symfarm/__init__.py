@@ -369,7 +369,7 @@ def get_links(albums, *, structure, tagmap, fallbacks):
         # issues where songs were grouped into the same album but the data was
         # cased differently (grouping is case-insensitive)
         album_tags = {
-            tag: get_tag(tag, album[0], tagmap=tagmap, fallbacks=fallbacks)
+            tag: get_tag(tag, album[0], tagmap=tagmap)
             for tag in ALBUM_TAGS
         }
 

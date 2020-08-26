@@ -371,6 +371,9 @@ def get_links(albums, *, structure, tagmap, fallbacks):
             if bool(get_tag("ALBUMARTIST", album[0], tagmap=tagmap)):
                 # Not a compilation if an albumartist is set (probably an anthology)
                 album_fmt = structure["path"]
+            elif not bool(get_tag("ALBUM", album[0], tagmap=tagmap)):
+                # Not a compilation if the album is unknown (probably just missing tags)
+                album_fmt = structure["path"]
             else:
                 # No albumartist set - assume a compilation
                 album_fmt = structure["path_compilation"]

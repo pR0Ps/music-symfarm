@@ -312,7 +312,7 @@ def get_songs(music_dir, valid_files, *, overrides=None,
                 __log__.warning("Failed to parse tags from file: '%s'", path)
                 failed += 1
                 continue
-            tags = {k: v[0].strip() for k, v in tags.items() if v}
+            tags = {k: v[0].strip() or None for k, v in tags.items() if v}
             tags["abspath"] = path
             tags["path"] = os.path.relpath(path, music_dir)
             tags["ext"] = path.rsplit(".", 1)[-1]

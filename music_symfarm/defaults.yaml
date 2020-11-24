@@ -29,9 +29,10 @@ structure:
   path: "{ALBUMARTIST}/{ALBUM} ({year})"
   path_compilation: "Various Artists/{ALBUM} ({year})"
 
-  # File naming templates
+  # Filename where the artist is the same for all songs in the album
   file: "{TRACKNUMBER:>02} - {TITLE}.{ext}"
-  file_compilation: "{TRACKNUMBER:>02} - {ARTIST} - {TITLE}.{ext}"
+  # Filename where there are multiple artists in the same album
+  file_multiartist: "{TRACKNUMBER:>02} - {ARTIST} - {TITLE}.{ext}"
 
   # Added to the front of the filename in the case of more than 1 disc
   # file_disc_prefix: "Disc {DISCNUMBER}/"
@@ -61,7 +62,7 @@ tagmap:
 # Supports template strings.
 # Can be used to create custom variables (ie: "year" is just a regex of "DATE").
 # When creating custom variables use lower case. This will prevent conflicts
-# with tags pulled from files (tags are alway uppercase)
+# with tags pulled from files (tags are always uppercase)
 fallbacks:
   year: "{DATE:/^(\\d+).*$/\\1/}"
   ALBUMARTIST: "{ARTIST}"
@@ -130,7 +131,12 @@ fallbacks:
 #      - Don't link this file
 #    - `is_compilation`:
 #      - boolean that sets if the album is a compilation or not
-#      - Can also set the "COMPILATION" tag to "1" for True
+#      - Since the COMPILATION tag is frequently misused, it is ignored. If
+#        your collection isn't like this, use an override of: COMPILATION=1 -->
+#        is_compilation=True to force the tag to be respected.
+#      - When setting is_compilation=False on an album, it's recommended to
+#        make sure the ALBUMARTIST tag is set to the same thing for every song
+#        to keep them grouped into a single album.
 #
 #  - Values:
 #    - Processed as Python templates
@@ -171,6 +177,11 @@ fallbacks:
 #  # (in this case it's being used to do a case-insensitive match)
 #  - - ALBUMARTIST: "/(?i:band of the year)/"
 #    - ALBUMARTIST: "Band of the Year"
-
+#
+#  # Force all albums with an ALBUMARTIST of "Various" or "Various Artists"
+#  # to be compilations (this is a fairly standard convention).
+#  - - ALBUMARTIST: "/(?i:various( artists)?)/"
+#    - is_compilation: True
+#
 # No overrides configured by default
 overrides:

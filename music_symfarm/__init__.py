@@ -93,12 +93,15 @@ class Override:
 
                 if v is None:
                     # Pop tags that are an empty string or None out of the tags
-                    if self.debug:
-                        __log__.info("Removed '%s'", k)
+                    if self.debug and k in tags:
+                        __log__.info("Removed tag '%s'", k)
                     tags.pop(k, None)
                 else:
-                    if self.debug:
-                        __log__.info("Set '%s' to '%s' (was '%s')", k, v, tags.get(k, "<unset>"))
+                    if self.debug and (k not in tags or tags[k] != v):
+                        __log__.info(
+                            "Set tag '%s' to '%s' (was '%s')",
+                            k, v, tags.get(k, "<unset>")
+                        )
                     tags[k] = v
 
     def __repr__(self):

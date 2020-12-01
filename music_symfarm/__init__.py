@@ -171,10 +171,10 @@ def get_tag(tag, tags, *, tagmap, fallbacks=None, default=None):
         else:
             data = fallback
 
-    # Special case:
-    if data and tag in {"DISCNUMBER", "TRACKNUMBER"}:
-        with contextlib.suppress(TypeError, ValueError, AttributeError):
-            data = data.split("/")[0]
+    # Special case - convert the format of "x/y" --> "x" for {DISC,TRACK}NUMBER
+    if data and tag in {"DISCNUMBER", "TRACKNUMBER"} and isinstance(data, str):
+        data = data.split("/")[0]
+
     if data is None:
         return default
     return data

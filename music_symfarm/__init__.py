@@ -84,7 +84,7 @@ class Override:
         """Apply the overrides to the tags (modifies tags in-place)"""
         if self.matches(tags, tagmap=tagmap):
             if self.debug:
-                __log__.info("Song '%s' matched override %r ", tags["abspath"], self)
+                __log__.info("Song '%s' matched override %r", tags["abspath"], self)
             for k, v in self.operations.items():
                 # Apply any formatting if the target is a string
                 # (treat empty string as None)
@@ -105,7 +105,8 @@ class Override:
                     tags[k] = v
 
     def __repr__(self):
-        return "<Override ({} -> {})>".format(
+        return "<{} ({} -> {})>".format(
+            self.__class__.__name__,
             " & ".join(
                 ("{}~=/{}/".format(t, r.pattern) if isinstance(r, Pattern) else "{}={}".format(t, r))
                 for t, r in self.rules.items()

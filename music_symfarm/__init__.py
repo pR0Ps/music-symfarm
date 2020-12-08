@@ -289,6 +289,16 @@ def process_linkdir(link_dir, music_dirs, *, existing=True, clean=True, relative
     return None
 
 
+def get_files(start):
+    """Yield all the files under 'start' as (directory, filename) pairs"""
+    if start.is_file():
+        yield os.path.split(start.absolute())
+    else:
+        for dirpath, _, files in os.walk(start):
+            for f in files:
+                yield dirpath, f
+
+
 def get_songs(music_dir, valid_files, *, overrides=None,
               tagmap, fallbacks=None, existing=None):
     """Scrape through the music directory and yield indvidual songs
@@ -300,35 +310,45 @@ def get_songs(music_dir, valid_files, *, overrides=None,
     existing = existing or set()
     file_regexes = [re.compile(x) for x in valid_files]
     success, linked, ignored, failed = 0, 0, 0, 0
-    for dirpath, dirs, files in os.walk(music_dir):
-        for f in files:
-            if not any(x.fullmatch(f) for x in file_regexes):
-                ignored += 1
-                continue
+    for dirpath, f in get_files(music_dir):
+        if not any(x.fullmatch(f) for x in file_regexes):
+            ignored += 1
+            continue
 
-            path = os.path.join(dirpath, f)
-            if path in existing:
-                linked += 1
-                continue
-            try:
-                tags = taglib.File(path).tags
-            except OSError:
-                __log__.warning("Failed to parse tags from file: '%s'", path)
-                failed += 1
-                continue
-            tags = {k: v[0].strip() or None for k, v in tags.items() if v}
-            tags["abspath"] = path
-            tags["path"] = os.path.relpath(path, music_dir)
-            tags["ext"] = path.rsplit(".", 1)[-1]
-            tags["filename"] = f
-            __log__.debug("Scraped tags from file: '%s':\n%r", path, tags)
-            success += 1
+        path = os.path.join(dirpath, f)
+        if path in existing:
+            linked += 1
+            continue
+        try:
+            tags = taglib.File(path).tags
+        except OSError:
+            __log__.warning("Failed to parse tags from file: '%s'", path)
+            failed += 1
+            continue
 
-            if overrides:
-                for o in overrides:
-                    o.apply(tags, tagmap=tagmap, fallbacks=fallbacks)
+        # Handle the case where the "music_dir" is a single file
+        relpath = os.path.relpath(path, music_dir)
+        if relpath == ".":
+            relpath = f
 
-            yield tags
+        # Handle the case where the file has no extension
+        ext = f.rsplit(".", 1)[-1]
+        if ext == f:
+            ext = None
+
+        tags = {k: v[0].strip() or None for k, v in tags.items() if v}
+        tags["abspath"] = path
+        tags["path"] = relpath
+        tags["ext"] = ext
+        tags["filename"] = f
+        __log__.debug("Scraped tags from file: '%s':\n%r", path, tags)
+        success += 1
+
+        if overrides:
+            for o in overrides:
+                o.apply(tags, tagmap=tagmap, fallbacks=fallbacks)
+
+        yield tags
 
     __log__.info(
         "Found %d new songs (%d total files, %d already linked, %d non-music files ignored, %d failed)",

@@ -7,6 +7,7 @@ import logging
 import os
 from pathlib import Path
 import re
+from re import error as RegexError
 from string import Formatter
 from typing import Pattern
 
@@ -18,20 +19,100 @@ import yaml
 # Tags that have to be the same for songs to be considered in the same album
 ALBUM_TAGS = ("ALBUMARTIST", "ALBUM", "DATE")
 
+# Regex to split a string on "/"s, excluding those found in {}'s (but not {{}}'s)
+# NOTE: only works properly if the braces are balanced (ie. a valid format string)
+RE_TEMPLATE_SLASHES = re.compile(r"/(?=(?:}}|[^}])*(?:(?:$|{[^{])))")
+
+# Regex that matches non-escaped slashes
+RE_SLASHES = re.compile(r"(?<!\\)/")
+
+# Regex for matching regex-enabled format string replacements
+RE_FORMAT_STR_REGEX = re.compile("{(.*?):/(.+?)" + RE_SLASHES.pattern + "(.+?)" + RE_SLASHES.pattern + "(.*)}")
+
+# Regex for matching the regex portion of fields
+RE_FORMAT_FIELD_EXPAND = re.compile("(.*)" + RE_SLASHES.pattern + "(.+?)" + RE_SLASHES.pattern)
 
 __log__ = logging.getLogger(__name__)
+
+
+class FieldRegexExpandError(ValueError):
+    """Raised when trying to expand a non-regex match in a template"""
+
+    def __init__(self, obj, field):
+        super().__init__(
+            f"Object '{obj}' from field '{field}' is not a re.Match and cannot be expanded",
+            obj,
+            field
+        )
 
 
 class RegexFormatter(Formatter):
     """A string formatter that does regex substitutions
 
-    Ex: {0:/pattern/repl/<other formatting options>}
+    Adds the ability to use regular expressions to format objects:
+     - Format: {0:/<pattern>/<repl>/<other formatting options>}
+     - Ex: "{0:/(\w+) (\w+)/\2 \1/}".format("aaa bb") --> "bb aaa"
+     - See https://docs.python.org/3/library/re.html#re.sub
+
+    Adds the ability to expand re.Match objects with a template. Ex:
+     - Format: {0/<template>/:<other formatting options>}
+     - Ex: "{0/\2 \1/}".format(re.match(r"(\w+) (\w+)", "aaa, bb")) --> "bb aaa"
+     - See https://docs.python.org/3/library/re.html#re.Match.expand
+
+    To use the "/" character in the pattern or repl, escape it ("\\/")
+    To use "{" or "}" characters in the pattern or repl, use "{{" or "}}"
     """
+    def parse(self, format_string):
+        # Allow for including curly braces in formats by changing them to
+        # fullwidth versions for parsing and changing them back before yielding
+        # them.
+        esc = lambda x: x and x.replace("{{", "｛").replace("}}", "｝")
+        unesc = lambda x: x and x.replace("｛", "{{").replace("｝", "}}")
+        apply = lambda f, d, *n: tuple((x if i not in n else f(x)) for i, x in enumerate(d))
+        escmatch = lambda m: "{{{}:/{}/{}/{}}}".format(*apply(esc, m.groups(), 1, 2))
+
+        try:
+            format_string = RE_FORMAT_STR_REGEX.sub(escmatch, format_string)
+            for x in super().parse(format_string):
+                yield apply(unesc, x, 2)
+        except ValueError as e:
+            raise ValueError(f"Failed to parse format string '{format_string}'") from e
+
     def format_field(self, value, format_spec):
+        # Special cases:
+        # Format an re.Match as its matched text instead of its repr
+        if isinstance(value, re.Match):
+            value = value.group(0)
+
+        # Format None as "" instead of "None"
+        if value is None:
+            value = ""
+
         if format_spec.startswith("/"):
-            _, pattern, repl, format_spec = format_spec.split("/", 3)
+            # Split on non-escaped forward slashes
+            _, pattern, repl, format_spec = RE_SLASHES.split(format_spec, maxsplit=3)
+            # Convert any escaped slashes to regular slashes for the regex sub
+            pattern, repl = (x.replace("\\/", "/") for x in (pattern, repl))
             value = re.sub(pattern, repl, value)
+
         return super().format_field(value, format_spec)
+
+    def get_field(self, field_name, args, kwargs):
+        # Handle templating of re.Match objects when using the {0/<template>/} syntax
+        m = RE_FORMAT_FIELD_EXPAND.fullmatch(field_name)
+        if m:
+            field_name = m[1]
+
+        obj, used_key = super().get_field(field_name, args, kwargs)
+
+        if m:
+            if not isinstance(obj, re.Match):
+                raise FieldRegexExpandError(obj, used_key)
+            # Convert any escaped slashes to regular slashes for the expansion
+            obj = obj.expand(m[2].replace("\\/", "/"))
+
+        return obj, used_key
+
 
 REGEX_FORMATTER = RegexFormatter()
 
@@ -68,28 +149,60 @@ class Override:
 
     @staticmethod
     def _rule_match(rule, data):
+        """Return the match object/text if matched or False"""
+        # Use False instead of None because None is a valid option
         if isinstance(rule, Pattern) and data is not None:
-            return rule.fullmatch(data)
-        return rule == data
+            return rule.fullmatch(data) or False
+        elif rule == data:
+            return data
+        return False
 
     def matches(self, tags, *, tagmap):
-        """Check if this override should be applied, given the provided tags"""
+        """Check if this override should be applied, given the provided tags
+
+        Returns a dict of rule -> match if the override matches, otherwise None
+        """
+        ret = {}
         for tag_name, rule in self.rules.items():
             data = get_tag(tag_name, tags, tagmap=tagmap)
-            if not self._rule_match(rule, data):
-                return False
-        return True
+            ret[tag_name] = self._rule_match(rule, data)
+            if ret[tag_name] is False:
+                return None
+        return ret
 
     def apply(self, tags, *, tagmap, fallbacks):
         """Apply the overrides to the tags (modifies tags in-place)"""
-        if self.matches(tags, tagmap=tagmap):
+        matched = self.matches(tags, tagmap=tagmap)
+        if matched:
             if self.debug:
                 __log__.info("Song '%s' matched override %r", tags["abspath"], self)
             for k, v in self.operations.items():
                 # Apply any formatting if the target is a string
                 # (treat empty string as None)
-                if isinstance(v, str):
-                    v = format_template(v, tags, tagmap=tagmap, fallbacks=fallbacks) or None
+                # Since path_template is meant to be a template, don't format it
+                if k != "path_template" and isinstance(v, str):
+
+                    # Override tags with matched information when formatting
+                    # The matched information will either be the same as the tag or a regex object
+                    # (a regex object will be formatted as the matched string by default)
+                    data = {**tags, **matched}
+
+                    def _tagwarn(msg, *args):
+                        __log__.warning(
+                            "Not setting tag '%s' on '%s' - " + msg,
+                            k, tags["abspath"], *args
+                        )
+                    try:
+                        v = format_template(v, data, tagmap=tagmap, fallbacks=fallbacks) or None
+                    except KeyError as e:
+                        _tagwarn("Failed to get tag '%s' for template '%s'", e.args[0], v)
+                        continue
+                    except RegexError as e:
+                        _tagwarn("Failed to expand regex match for template '%s' (%s)", v, e)
+                        continue
+                    except FieldRegexExpandError as e:
+                        _tagwarn("Tag '%s' is not a regex match in template '%s'", e.args[2], v)
+                        continue
 
                 if v is None:
                     # Pop tags that are an empty string or None out of the tags
@@ -445,13 +558,17 @@ def get_links(albums, *, structure, tagmap, fallbacks):
             if song.get("preserve_filename"):
                 track_fmt = "{filename}"
 
-            path_format = song.get("path_format", "{}/{}".format(album_fmt, track_fmt))
+            path_template = song.get("path_template", "{}/{}".format(album_fmt, track_fmt))
+
+            # Make sure the path_template is valid before attempting formatting
+            # The following will raise an exception if it isn't
+            all(REGEX_FORMATTER.parse(path_template))
 
             link_name = os.sep.join(
                 format_template(
                     path_comp, song, tagmap=tagmap, fallbacks=fallbacks
                 ).translate(charmap)
-                for path_comp in path_format.split("/")
+                for path_comp in RE_TEMPLATE_SLASHES.split(path_template)
             )
             yield (link_name, song["abspath"])
 

@@ -76,7 +76,7 @@ fallbacks:
 
 # The overrides section contains a list of overrides for the scanned music.
 # Generally:
-#  1. Match based on one or more criteria
+#  1. Match based on one or more criteria (all must match)
 #  2. Apply one or more operations
 #  3. Order matters (all matching operations will be executed in the specified order)
 #
@@ -104,6 +104,9 @@ fallbacks:
 #    - ex: "Some artist" (will match "Some artist" but not "Some Artist")
 #  - regex match
 #    - used by starting and ending the selection with "/"
+#    - Special characters:
+#      - The "/" character must be escaped ("\\/") to be used in a match
+#      - To use the "{" or "}" character, use "{{" or "}}" instead (like normal format strings)
 #    - Supports the full Python regex syntax
 #      - https://docs.python.org/3/library/re.html#regular-expression-syntax
 #    - Must completely match ("/art/" will NOT match "artist")
@@ -126,11 +129,11 @@ fallbacks:
 #    - `preserve_filename`:
 #      - A bool that controls if the original filename is preserved in the symlink
 #      - The directory the symlink goes in is not affected
-#      - Can be overriden by `path_format`
-#    - `path_format`:
-#      - The full path format to use (relative to the output directory)
-#      - ex: "Other songs/{ext}/{filename}"
+#      - Can be overridden by `path_template`
+#    - `path_template`:
+#      - The full path template to use (relative to the output directory)
 #      - Will override all other settings that affect the path
+#      - ex: "Other songs/{ext}/{filename}"
 #    - `ignore`:
 #      - Don't link this file
 #    - `is_compilation`:
@@ -143,12 +146,18 @@ fallbacks:
 #        to keep them grouped into a single album.
 #
 #  - Values:
-#    - If a value is null, the tag will be removed from the song
+#    - If a value is null, the tag will be removed
 #    - Processed as Python templates
-#    - See https://docs.python.org/3/library/string.html#formatspec
+#      - See https://docs.python.org/3/library/string.html#formatspec
 #    - Any metadata from the song can be used by the template
 #      - ex: "{ARTIST}"
-#    - In addition, there is a regex formatter:
+#    - If a key's selection was a regular expression, the match can be expanded
+#      - See https://docs.python.org/3/library/re.html#re.Match.expand
+#      - To expand a variable, use the format "KEY/<template>/" for the key name
+#      - ex: "{ARTIST/\\1/}" (when ARTIST was selected as a regex with at least 1 group)
+#      - A non-expanded regex will be formatted as the entire match (ie. the entire tag)
+#    - Variables can be formatted using regex:
+#      - See https://docs.python.org/3/library/re.html#re.sub
 #      - By using a format specifier like "/match/sub/<normal format spec>",
 #        the regex substitution will first be applied before the rest of the
 #        format spec is processed
@@ -156,6 +165,9 @@ fallbacks:
 #            the leading digits off it, and insert them into the value.
 #            This specific case is useful for assigning disc numbers to files
 #            based on the filename if they aren't included in the tags.
+#    - Both of the above can be combined:
+#      - ex: '{ARTIST/\\1/:/(.*) A (.*)/\\1 a \\2/}' will take the first component
+#            of the ARTIST regex match, then lowercase the " A " in the middle of it
 #
 # Some full examples are provided below (note the position of the "-"s)
 #overrides:
@@ -171,7 +183,7 @@ fallbacks:
 #  # Directly set the final path of the symlinks
 #  # OC ReMix stores the game the music originated from in the ORIGINALALBUM tag
 #  - - ALBUM: "http://www.ocremix.org"
-#    - path_format: "OverClocked ReMix/{ORIGINALALBUM}/{filename}"
+#    - path_template: "OverClocked ReMix/{ORIGINALALBUM}/{filename}"
 #
 #  # Use regex to set disc numbers based on the filename
 #  - - ARTIST: "A Band"
@@ -182,6 +194,12 @@ fallbacks:
 #  # (in this case it's being used to do a case-insensitive match)
 #  - - ALBUMARTIST: "/(?i:band of the year)/"
 #    - ALBUMARTIST: "Band of the Year"
+#
+#  # Use regex to pull disc numbers out of an album title
+#  # (sets both the album and discnumber from the same match)
+#  - - ALBUM: "/(.*) \[CD (\d+)\]/"
+#    - ALBUM: "{ALBUM/\\1/}"
+#      DISCNUMBER: "{ALBUM/\\2/}"
 #
 #  # Force all albums with an ALBUMARTIST of "Various" or "Various Artists"
 #  # to be compilations (this is a fairly standard convention).

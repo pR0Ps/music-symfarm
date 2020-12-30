@@ -170,52 +170,58 @@ class Override:
                 return None
         return ret
 
+    def _indent(self, s):
+        return "  " + s
+
+    def _apply_match(self, matched, tags, *, tagmap, fallbacks):
+        if self.debug:
+            __log__.info("Song '%s' matched %r", tags["abspath"], self)
+        for k, v in self.operations.items():
+            # Apply any formatting if the target is a string
+            # (treat empty string as None)
+            # Since path_template is meant to be a template, don't format it
+            if k != "path_template" and isinstance(v, str):
+
+                # Override tags with matched information when formatting
+                # The matched information will either be the same as the tag or a regex object
+                # (a regex object will be formatted as the matched string by default)
+                data = {**tags, **matched}
+
+                def _tagwarn(msg, *args):
+                    __log__.warning(
+                        "Not setting tag '%s' on '%s' - " + msg,
+                        k, tags["abspath"], *args
+                    )
+                try:
+                    v = format_template(v, data, tagmap=tagmap, fallbacks=fallbacks) or None
+                except KeyError as e:
+                    _tagwarn("Failed to get tag '%s' for template '%s'", e.args[0], v)
+                    continue
+                except RegexError as e:
+                    _tagwarn("Failed to expand regex match for template '%s' (%s)", v, e)
+                    continue
+                except FieldRegexExpandError as e:
+                    _tagwarn("Tag '%s' is not a regex match in template '%s'", e.args[2], v)
+                    continue
+
+            if v is None:
+                # Pop tags that are an empty string or None out of the tags
+                if self.debug and k in tags:
+                    __log__.info(self._indent("Removed tag '%s'"), k)
+                tags.pop(k, None)
+            else:
+                if self.debug and (k not in tags or tags[k] != v):
+                    __log__.info(
+                        self._indent("Set tag '%s' to '%s' (was '%s')"),
+                        k, v, tags.get(k, "<unset>")
+                    )
+                tags[k] = v
+
     def apply(self, tags, *, tagmap, fallbacks):
         """Apply the overrides to the tags (modifies tags in-place)"""
         matched = self.matches(tags, tagmap=tagmap)
         if matched:
-            if self.debug:
-                __log__.info("Song '%s' matched override %r", tags["abspath"], self)
-            for k, v in self.operations.items():
-                # Apply any formatting if the target is a string
-                # (treat empty string as None)
-                # Since path_template is meant to be a template, don't format it
-                if k != "path_template" and isinstance(v, str):
-
-                    # Override tags with matched information when formatting
-                    # The matched information will either be the same as the tag or a regex object
-                    # (a regex object will be formatted as the matched string by default)
-                    data = {**tags, **matched}
-
-                    def _tagwarn(msg, *args):
-                        __log__.warning(
-                            "Not setting tag '%s' on '%s' - " + msg,
-                            k, tags["abspath"], *args
-                        )
-                    try:
-                        v = format_template(v, data, tagmap=tagmap, fallbacks=fallbacks) or None
-                    except KeyError as e:
-                        _tagwarn("Failed to get tag '%s' for template '%s'", e.args[0], v)
-                        continue
-                    except RegexError as e:
-                        _tagwarn("Failed to expand regex match for template '%s' (%s)", v, e)
-                        continue
-                    except FieldRegexExpandError as e:
-                        _tagwarn("Tag '%s' is not a regex match in template '%s'", e.args[2], v)
-                        continue
-
-                if v is None:
-                    # Pop tags that are an empty string or None out of the tags
-                    if self.debug and k in tags:
-                        __log__.info("Removed tag '%s'", k)
-                    tags.pop(k, None)
-                else:
-                    if self.debug and (k not in tags or tags[k] != v):
-                        __log__.info(
-                            "Set tag '%s' to '%s' (was '%s')",
-                            k, v, tags.get(k, "<unset>")
-                        )
-                    tags[k] = v
+            self._apply_match(matched, tags, tagmap=tagmap, fallbacks=fallbacks)
 
     def __repr__(self):
         return "<{} ({} -> {})>".format(

@@ -179,8 +179,8 @@ class Override:
         for k, v in self.operations.items():
             # Apply any formatting if the target is a string
             # (treat empty string as None)
-            # Since path_template is meant to be a template, don't format it
-            if k != "path_template" and isinstance(v, str):
+            # Don't format templates (path/filename)
+            if isinstance(v, str) and not k.endswith("_template"):
 
                 # Override tags with matched information when formatting
                 # The matched information will either be the same as the tag or a regex object
@@ -561,9 +561,7 @@ def get_links(albums, *, structure, tagmap, fallbacks):
             if multidisc:
                 track_fmt = structure["file_disc_prefix"] + track_fmt
 
-            if song.get("preserve_filename"):
-                track_fmt = "{filename}"
-
+            track_fmt = song.get("filename_template", track_fmt)
             path_template = song.get("path_template", "{}/{}".format(album_fmt, track_fmt))
 
             # Make sure the path_template is valid before attempting formatting

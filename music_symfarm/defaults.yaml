@@ -126,10 +126,12 @@ fallbacks:
 #      - If set to true, the operation results will be logged out at the INFO level
 #    - any metadata keys:
 #      - ex: ARTIST, ALBUM, ALBUMARTIST, YEAR, etc
-#    - `preserve_filename`:
-#      - A bool that controls if the original filename is preserved in the symlink
+#    - `filename_template`:
+#      - The filename template to use
+#      - Will override all other settings that affect the filename
 #      - The directory the symlink goes in is not affected
 #      - Can be overridden by `path_template`
+#      - ex: "{filename}" (preserves the original filename)
 #    - `path_template`:
 #      - The full path template to use (relative to the output directory)
 #      - Will override all other settings that affect the path

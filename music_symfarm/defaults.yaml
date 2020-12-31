@@ -64,7 +64,7 @@ tagmap:
 # When creating custom variables use lower case. This will prevent conflicts
 # with tags pulled from files (tags are always uppercase)
 fallbacks:
-  year: "{DATE:/^(\\d+).*$/\\1/}"
+  year: "{DATE:/(\\d+).*/\\1/}"
   ALBUMARTIST: "{ARTIST}"
   ARTIST: "Unknown Artist"
   ALBUM: "Unknown Album"
@@ -163,7 +163,7 @@ fallbacks:
 #      - By using a format specifier like "/match/sub/<normal format spec>",
 #        the regex substitution will first be applied before the rest of the
 #        format spec is processed
-#      - ex: '{filename:/^(\d+).*$/\1/}' will take the "filename" value, pull
+#      - ex: '{filename:/(\d+).*/\1/}' will take the "filename" value, pull
 #            the leading digits off it, and insert them into the value.
 #            This specific case is useful for assigning disc numbers to files
 #            based on the filename if they aren't included in the tags.
@@ -190,7 +190,7 @@ fallbacks:
 #  # Use regex to set disc numbers based on the filename
 #  - - ARTIST: "A Band"
 #      ALBUM: "Greatest Hits (2 disc edition)"
-#    - DISCNUMBER: "{filename:/^(\\d+).*$/\\1/}"
+#    - DISCNUMBER: "{filename:/(\\d+).*/\\1/}"
 #
 #  # Use regex to match a certain artist
 #  # (in this case it's being used to do a case-insensitive match)

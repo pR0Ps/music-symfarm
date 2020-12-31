@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from collections import defaultdict
+from collections.abc import Mapping, Iterable
 import contextlib
 import itertools
 import logging
@@ -120,10 +121,34 @@ REGEX_FORMATTER = RegexFormatter()
 class Override:
     """Class to store and apply override data"""
 
-    def __init__(self, rules, operations):
+    def __init__(self, rules, *operations, parent=None):
+        if not isinstance(rules, Mapping):
+            raise ValueError(f"Value {rules!r} is not a valid rule set")
+
         self.rules = {k: self._make_rule(v) for k, v in rules.items()}
-        self.operations = {k: self._make_operation(v) for k, v in operations.items()}
+        self.operations = {}
+        self.children = []
+        self.level = parent.level + 1 if parent else 0
+
+        _children = []
+        for op in operations:
+            if isinstance(op, Mapping):
+                self.operations.update({k: self._make_operation(v) for k, v in op.items()})
+            elif isinstance(op, Iterable):
+                # Queue up nested overrides
+                _children.append(op)
+            else:
+                raise ValueError(f"Value {op!r} is not a valid operation or Override")
+
+        # Pull the configured debug state out of the overrides
         self.debug = self.operations.pop("debug", False)
+
+        # Process nested overrides
+        self.children = [Override(*x, parent=self) for x in _children]
+
+        # If debug is enabled, enable debug on all parent overrides
+        if self.debug and parent:
+            parent.debug = True
 
     @staticmethod
     def _make_operation(operation):
@@ -170,12 +195,16 @@ class Override:
                 return None
         return ret
 
-    def _indent(self, s):
-        return "  " + s
+    def _indent(self, s, extra=0):
+        return "  " * (self.level + extra) + s
 
     def _apply_match(self, matched, tags, *, tagmap, fallbacks):
         if self.debug:
-            __log__.info("Song '%s' matched %r", tags["abspath"], self)
+            # Only log out the full path once
+            if self.level == 0:
+                __log__.info("Song '%s' matched %r", tags["abspath"], self)
+            else:
+                __log__.info(self._indent("Matched %r"), self)
         for k, v in self.operations.items():
             # Apply any formatting if the target is a string
             # (treat empty string as None)
@@ -189,7 +218,7 @@ class Override:
 
                 def _tagwarn(msg, *args):
                     __log__.warning(
-                        "Not setting tag '%s' on '%s' - " + msg,
+                        self._indent("Not setting tag '%s' on '%s' - " + msg),
                         k, tags["abspath"], *args
                     )
                 try:
@@ -207,33 +236,45 @@ class Override:
             if v is None:
                 # Pop tags that are an empty string or None out of the tags
                 if self.debug and k in tags:
-                    __log__.info(self._indent("Removed tag '%s'"), k)
+                    __log__.info(self._indent("Removed tag '%s'", extra=1), k)
                 tags.pop(k, None)
             else:
                 if self.debug and (k not in tags or tags[k] != v):
                     __log__.info(
-                        self._indent("Set tag '%s' to '%s' (was '%s')"),
+                        self._indent("Set tag '%s' to '%s' (was '%s')", extra=1),
                         k, v, tags.get(k, "<unset>")
                     )
                 tags[k] = v
 
-    def apply(self, tags, *, tagmap, fallbacks):
+    def apply(self, tags, *, tagmap, fallbacks, parent_match=None):
         """Apply the overrides to the tags (modifies tags in-place)"""
         matched = self.matches(tags, tagmap=tagmap)
+
         if matched:
+            # Allow using the parent override's match data
+            # (except where the child redefines it)
+            if parent_match:
+                matched = {**parent_match, **matched}
+
+            # Apply the local operations
             self._apply_match(matched, tags, tagmap=tagmap, fallbacks=fallbacks)
 
+            # Apply child overrides
+            for c in self.children:
+                c.apply(tags, tagmap=tagmap, fallbacks=fallbacks, parent_match=matched)
+
     def __repr__(self):
-        return "<{} ({} -> {})>".format(
+        return "<{} ({}{}{})>".format(
             self.__class__.__name__,
             " & ".join(
-                ("{}~=/{}/".format(t, r.pattern) if isinstance(r, Pattern) else "{}={}".format(t, r))
+                f"{t}~=/{r.pattern}/" if isinstance(r, Pattern) else f"{t}={r}"
                 for t, r in self.rules.items()
             ),
-            ",".join(
-                "{}={}".format(*x)
-                for x in self.operations.items()
-            )
+            " -> " + ",".join(
+                f"{t}={o}"
+                for t, o in self.operations.items()
+            ) if self.operations else "",
+            f" <{len(self.children)} nested>" if self.children else ""
         )
 
 

@@ -79,6 +79,7 @@ fallbacks:
 #  1. Match based on one or more criteria (all must match)
 #  2. Apply one or more operations
 #  3. Order matters (all matching operations will be executed in the specified order)
+#  4. Overrides can be nested (they will be processed after parent overrides)
 #
 # Selection criteria:
 #   - any metadata from the music
@@ -121,6 +122,7 @@ fallbacks:
 #  - Keys:
 #    - `debug`:
 #      - If set to true, the operation results will be logged out at the INFO level
+#      - If enabled on a nested override, the parents will have debug enabled as well
 #    - any metadata keys:
 #      - ex: ARTIST, ALBUM, ALBUMARTIST, YEAR, etc
 #    - `filename_template`:
@@ -171,6 +173,12 @@ fallbacks:
 #      - ex: '{ARTIST/\\1/:/(.*) A (.*)/\\1 a \\2/}' will take the first component
 #            of the ARTIST regex match, then lowercase the " A " in the middle of it
 #
+# Nested Overrides:
+#  - Specify them as a list of normally-configured overrides after the operations
+#  - Processed only if the parent override selection matched
+#  - Processed after executing all operations of the parent override
+#  - See examples below
+#
 # Some full examples are provided below (note the position of the "-"s)
 #overrides:
 #  # Set the album artist based on the artist and album
@@ -183,9 +191,18 @@ fallbacks:
 #    - ignore: True
 #
 #  # Directly set the final path of the symlinks
-#  # OC ReMix stores the game the music originated from in the ORIGINALALBUM tag
-#  - - ALBUM: "http://www.ocremix.org"
-#    - path_template: "OverClocked ReMix/{ORIGINALALBUM}/{filename}"
+#  # OC ReMix stores the album and the game the music originated from in the
+#  # ORIGINALALBUM and CONTENTGROUP tags respectively.
+#  # Uses nested overrides to set the path based on album, falling back to the game
+#  - - ALBUM: "/.*ocremix.org/"
+#    - - ORIGINALALBUM: "/.+/"
+#      - path_template: "OverClocked ReMix/{ORIGINALALBUM}/{filename}"
+#    - - ORIGINALALBUM: null
+#        CONTENTGROUP: "/.+/"
+#      - path_template: "OverClocked ReMix/{CONTENTGROUP}/{filename}"
+#    - - ORIGINALALBUM: null
+#        CONTENTGROUP: null
+#      - path_template: "OverClocked ReMix/{filename}"
 #
 #  # Use regex to set disc numbers based on the filename
 #  - - ARTIST: "A Band"

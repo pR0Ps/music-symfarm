@@ -104,9 +104,6 @@ fallbacks:
 #    - ex: "Some artist" (will match "Some artist" but not "Some Artist")
 #  - regex match
 #    - used by starting and ending the selection with "/"
-#    - Special characters:
-#      - The "/" character must be escaped ("\\/") to be used in a match
-#      - To use the "{" or "}" character, use "{{" or "}}" instead (like normal format strings)
 #    - Supports the full Python regex syntax
 #      - https://docs.python.org/3/library/re.html#regular-expression-syntax
 #    - Must completely match ("/art/" will NOT match "artist")
@@ -151,11 +148,13 @@ fallbacks:
 #    - If a value is null, the tag will be removed
 #    - Processed as Python templates
 #      - See https://docs.python.org/3/library/string.html#formatspec
+#      - To use the "{" or "}" character, use "{{" or "}}" instead (like normal format strings)
 #    - Any metadata from the song can be used by the template
 #      - ex: "{ARTIST}"
 #    - If a key's selection was a regular expression, the match can be expanded
 #      - See https://docs.python.org/3/library/re.html#re.Match.expand
 #      - To expand a variable, use the format "KEY/<template>/" for the key name
+#      - The "/" character must be escaped ("\\/") to be used literally
 #      - ex: "{ARTIST/\\1/}" (when ARTIST was selected as a regex with at least 1 group)
 #      - A non-expanded regex will be formatted as the entire match (ie. the entire tag)
 #    - Variables can be formatted using regex:
@@ -163,6 +162,7 @@ fallbacks:
 #      - By using a format specifier like "/match/sub/<normal format spec>",
 #        the regex substitution will first be applied before the rest of the
 #        format spec is processed
+#      - The "/" character must be escaped ("\\/") to be used literally
 #      - ex: '{filename:/(\d+).*/\1/}' will take the "filename" value, pull
 #            the leading digits off it, and insert them into the value.
 #            This specific case is useful for assigning disc numbers to files

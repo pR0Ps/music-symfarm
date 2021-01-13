@@ -43,8 +43,8 @@ structure:
 
   # Defines a map of bad character to replacement to use in paths
   character_replace:
-    - '<>:\/|'
-    - '[]----'
+    -   '‘’“”‐<>:\/|'
+    - '''''""-[]----'
 
 
 # Map of tag name to all the tag names to try when asking for it.

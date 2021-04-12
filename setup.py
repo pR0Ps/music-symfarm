@@ -10,9 +10,7 @@ setup(
     license="MPLv2",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     packages=["music_symfarm"],
     package_data={

@@ -603,7 +603,7 @@ def get_links(albums, *, structure, tagmap, fallbacks):
                 track_fmt = structure["file_disc_prefix"] + track_fmt
 
             track_fmt = song.get("filename_template", track_fmt)
-            path_template = song.get("path_template", "{}/{}".format(album_fmt, track_fmt))
+            path_template = song.get("path_template", f"{album_fmt}/{track_fmt}")
 
             # Make sure the path_template is valid before attempting formatting
             # The following will raise an exception if it isn't

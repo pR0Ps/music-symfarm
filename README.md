@@ -80,7 +80,7 @@ $ source .venv/bin/activate
 
 Note that you may need to manually install the `taglib` system library:
  - Linux users can typically install it via their preferred package manager
- - macOS users can install it via `brew install taglib`
+ - macOS users can install it via `brew install taglib` or `sudo port install taglib`
  - On Windows pip *should* automatically install a wheel that contains `taglib`
  - See the https://github.com/supermihi/pytaglib project for more information
 

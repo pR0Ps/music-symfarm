@@ -52,7 +52,7 @@ structure:
 # Note that the tag name itself will not be tried unless it is added to the list
 # ie: Use `DATE: ["DATE", "YEAR"]` vs `DATE: ["YEAR"]`
 tagmap:
-  DATE: ["ORIGINALDATE", "ORIGDATE", "DATE", "ORIGINALYEAR", "ORIGYEAR", "YEAR"]
+  DATE: ["ORIGINALDATE", "ORIGDATE", "ORIGINALYEAR", "ORIGYEAR", "RELEASEDATE", "DATE", "YEAR"]
   DISCNUMBER: ["DISCNUMBER", "DISKNUMBER", "DISC", "DISK"]
   DISCTOTAL: ["DISCTOTAL", "DISKTOTAL", "TOTALDISCS", "TOTALDISKS"]
   TRACKTOTAL: ["TRACKTOTAL", "TOTALTRACKS"]

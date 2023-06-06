@@ -78,18 +78,17 @@ $ source .venv/bin/activate
 (.venv)$ music-symfarm --help
 ```
 
-Note that you may need to manually install the `taglib` system library:
- - Linux users can typically install it via their preferred package manager
- - macOS users can install it via `brew install taglib` or `sudo port install taglib`
- - On Windows pip *should* automatically install a wheel that contains `taglib`
- - See the https://github.com/supermihi/pytaglib project for more information
+Note that `pip` *should* automatically install the `pytaglib` dependency via a wheel that includes
+the required `taglib` native library. If not, `taglib` and Python dev tools will need to be
+installed first. See the https://github.com/supermihi/pytaglib project for more information.
 
 Usage
 -----
 ```bash
 $ music-symfarm --help
-usage: music-symfarm [-h] [--conf CONF] [--clean] [--rescan-existing]
-                     [--relative-links]
+usage: music-symfarm [-h] [--conf CONF] [--clean | --no-clean]
+                     [--rescan-existing | --no-rescan-existing]
+                     [--relative-links | --no-relative-links]
                      [--log {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
                      music_dir [music_dir ...] link_dir
 
@@ -99,7 +98,7 @@ positional arguments:
   music_dir             Music source directories
   link_dir              Directory where the symlinks will be created
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   --conf CONF           A config file to override default settings
   --clean, --no-clean   Clean the link directory of broken links and empty

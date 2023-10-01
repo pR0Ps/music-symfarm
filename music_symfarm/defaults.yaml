@@ -64,7 +64,7 @@ tagmap:
 # When creating custom variables use lower case. This will prevent conflicts
 # with tags pulled from files (tags are always uppercase)
 fallbacks:
-  year: "{DATE:/(\\d+).*/\\1/}"
+  year: "{DATE:/(\\d{{0,4}}).*/\\1/}"
   ALBUMARTIST: "{ARTIST}"
   ARTIST: "Unknown Artist"
   ALBUM: "Unknown Album"

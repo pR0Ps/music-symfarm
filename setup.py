@@ -40,7 +40,7 @@ setup(
     },
     python_requires=">=3.9",
     install_requires=[
-        "pytaglib>=1.4.1,<3.0.0",
+        "pytaglib>=1.4.1,<4.0.0",
         "pyyaml>=5.3,<7.0",
         "setuptools>=23.0.0"
     ],

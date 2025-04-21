@@ -48,7 +48,7 @@ class FieldRegexExpandError(ValueError):
 
 
 class RegexFormatter(Formatter):
-    """A string formatter that does regex substitutions
+    r"""A string formatter that does regex substitutions
 
     Adds the ability to use regular expressions to format objects:
      - Format: {0:/<pattern>/<repl>/<other formatting options>}
